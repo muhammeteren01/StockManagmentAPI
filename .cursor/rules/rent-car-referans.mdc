@@ -1,0 +1,14 @@
+---
+description: Rent_Car projesini birebir kopyalama; referans olarak kullan
+alwaysApply: true
+---
+
+# Referans Proje Kullanımı
+
+`Rent_Car_Management_API` yalnızca ilham / referans kaynakıdır.
+
+- Stock Management API'ye Rent_Car'ı **birebir kopyalama**.
+- Yapı, paket, naming veya endpoint'ler bu projenin ihtiyacına göre
+  bağımsız seçilir.
+- Kullanıcı açıkça "Rent_Car gibi yap" demedikçe Rent_Car kalıplarını
+  zorunlu tutma.

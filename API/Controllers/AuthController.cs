@@ -1,0 +1,53 @@
+using System.Security.Claims;
+using Core.DTOs.Auth;
+using Core.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+
+/// <summary>Kimlik doğrulama endpoint'leri (register, login, me).</summary>
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
+{
+    private readonly IAuthService _authService;
+
+    public AuthController(IAuthService authService)
+    {
+        _authService = authService;
+    }
+
+    /// <summary>Yeni kullanıcı kaydı; JWT döner.</summary>
+    [HttpPost("register")]
+    [AllowAnonymous]
+    public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _authService.RegisterAsync(request, cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>Giriş; JWT döner.</summary>
+    [HttpPost("login")]
+    [AllowAnonymous]
+    public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _authService.LoginAsync(request, cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>Token'daki geçerli kullanıcı bilgilerini döner.</summary>
+    [HttpGet("me")]
+    [Authorize]
+    public IActionResult Me()
+    {
+        return Ok(new
+        {
+            id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+            email = User.FindFirst(ClaimTypes.Email)?.Value,
+            name = User.FindFirst(ClaimTypes.Name)?.Value,
+            role = User.FindFirst(ClaimTypes.Role)?.Value,
+            companyId = User.FindFirst("company_id")?.Value
+        });
+    }
+}
