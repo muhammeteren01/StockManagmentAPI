@@ -1,5 +1,4 @@
 using Core.DTOs.PurchaseOrders;
-using Core.Entities;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,20 +14,16 @@ public class PurchaseOrdersController : ControllerBase
     private readonly IPurchaseOrderService _purchaseOrderService;
 
     public PurchaseOrdersController(IPurchaseOrderService purchaseOrderService)
-    {
-        _purchaseOrderService = purchaseOrderService;
-    }
+        => _purchaseOrderService = purchaseOrderService;
 
     /// <summary>Tüm siparişleri listeler.</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<PurchaseOrder>>> GetAll(CancellationToken cancellationToken)
-    {
-        return Ok(await _purchaseOrderService.GetAllAsync(cancellationToken));
-    }
+    public async Task<ActionResult<IReadOnlyList<PurchaseOrderResponse>>> GetAll(CancellationToken cancellationToken)
+        => Ok(await _purchaseOrderService.GetAllAsync(cancellationToken));
 
     /// <summary>Id ile sipariş getirir.</summary>
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<PurchaseOrder>> GetById(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<PurchaseOrderResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var order = await _purchaseOrderService.GetByIdAsync(id, cancellationToken);
         return order is null ? NotFound() : Ok(order);
@@ -36,16 +31,14 @@ public class PurchaseOrdersController : ControllerBase
 
     /// <summary>Şirkete ait siparişleri listeler.</summary>
     [HttpGet("by-company/{companyId:guid}")]
-    public async Task<ActionResult<IReadOnlyList<PurchaseOrder>>> GetByCompany(Guid companyId, CancellationToken cancellationToken)
-    {
-        return Ok(await _purchaseOrderService.GetByCompanyIdAsync(companyId, cancellationToken));
-    }
+    public async Task<ActionResult<IReadOnlyList<PurchaseOrderResponse>>> GetByCompany(Guid companyId, CancellationToken cancellationToken)
+        => Ok(await _purchaseOrderService.GetByCompanyIdAsync(companyId, cancellationToken));
 
     /// <summary>Yeni sipariş oluşturur (Pending).</summary>
     [HttpPost]
-    public async Task<ActionResult<PurchaseOrder>> Create([FromBody] PurchaseOrder order, CancellationToken cancellationToken)
+    public async Task<ActionResult<PurchaseOrderResponse>> Create([FromBody] CreatePurchaseOrderRequest request, CancellationToken cancellationToken)
     {
-        var created = await _purchaseOrderService.CreateAsync(order, cancellationToken);
+        var created = await _purchaseOrderService.CreateAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 

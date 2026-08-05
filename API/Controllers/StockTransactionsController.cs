@@ -1,4 +1,4 @@
-using Core.Entities;
+using Core.DTOs.StockTransactions;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,20 +14,16 @@ public class StockTransactionsController : ControllerBase
     private readonly IStockTransactionService _stockTransactionService;
 
     public StockTransactionsController(IStockTransactionService stockTransactionService)
-    {
-        _stockTransactionService = stockTransactionService;
-    }
+        => _stockTransactionService = stockTransactionService;
 
     /// <summary>Tüm stok hareketlerini listeler.</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<StockTransaction>>> GetAll(CancellationToken cancellationToken)
-    {
-        return Ok(await _stockTransactionService.GetAllAsync(cancellationToken));
-    }
+    public async Task<ActionResult<IReadOnlyList<StockTransactionResponse>>> GetAll(CancellationToken cancellationToken)
+        => Ok(await _stockTransactionService.GetAllAsync(cancellationToken));
 
     /// <summary>Id ile stok hareketi getirir.</summary>
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<StockTransaction>> GetById(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<StockTransactionResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var transaction = await _stockTransactionService.GetByIdAsync(id, cancellationToken);
         return transaction is null ? NotFound() : Ok(transaction);
@@ -35,23 +31,19 @@ public class StockTransactionsController : ControllerBase
 
     /// <summary>Ürüne ait hareketleri listeler.</summary>
     [HttpGet("by-product/{productId:guid}")]
-    public async Task<ActionResult<IReadOnlyList<StockTransaction>>> GetByProduct(Guid productId, CancellationToken cancellationToken)
-    {
-        return Ok(await _stockTransactionService.GetByProductIdAsync(productId, cancellationToken));
-    }
+    public async Task<ActionResult<IReadOnlyList<StockTransactionResponse>>> GetByProduct(Guid productId, CancellationToken cancellationToken)
+        => Ok(await _stockTransactionService.GetByProductIdAsync(productId, cancellationToken));
 
     /// <summary>Depoya ait hareketleri listeler.</summary>
     [HttpGet("by-warehouse/{warehouseId:guid}")]
-    public async Task<ActionResult<IReadOnlyList<StockTransaction>>> GetByWarehouse(Guid warehouseId, CancellationToken cancellationToken)
-    {
-        return Ok(await _stockTransactionService.GetByWarehouseIdAsync(warehouseId, cancellationToken));
-    }
+    public async Task<ActionResult<IReadOnlyList<StockTransactionResponse>>> GetByWarehouse(Guid warehouseId, CancellationToken cancellationToken)
+        => Ok(await _stockTransactionService.GetByWarehouseIdAsync(warehouseId, cancellationToken));
 
-    /// <summary>Yeni stok hareketi oluşturur; Inventory güncellenir.</summary>
+    /// <summary>Yeni stok hareketi oluşturur.</summary>
     [HttpPost]
-    public async Task<ActionResult<StockTransaction>> Create([FromBody] StockTransaction transaction, CancellationToken cancellationToken)
+    public async Task<ActionResult<StockTransactionResponse>> Create([FromBody] CreateStockTransactionRequest request, CancellationToken cancellationToken)
     {
-        var created = await _stockTransactionService.CreateAsync(transaction, cancellationToken);
+        var created = await _stockTransactionService.CreateAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 }

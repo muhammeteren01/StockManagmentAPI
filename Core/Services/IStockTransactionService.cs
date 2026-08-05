@@ -1,10 +1,13 @@
-using Core.Entities;
+using Core.DTOs.StockTransactions;
 
 namespace Core.Services;
 
-/// <summary>StockTransaction iş kuralları; stok hareketi oluşturur ve Inventory'yi günceller.</summary>
-public interface IStockTransactionService : IGenericService<StockTransaction>
+/// <summary>StockTransaction iş kuralları (DTO tabanlı).</summary>
+public interface IStockTransactionService
 {
-    Task<IReadOnlyList<StockTransaction>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<StockTransaction>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default);
+    Task<StockTransactionResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<StockTransactionResponse>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<StockTransactionResponse>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<StockTransactionResponse>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default);
+    Task<StockTransactionResponse> CreateAsync(CreateStockTransactionRequest request, CancellationToken cancellationToken = default);
 }

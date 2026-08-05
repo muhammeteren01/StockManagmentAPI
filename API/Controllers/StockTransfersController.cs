@@ -1,4 +1,4 @@
-using Core.Entities;
+using Core.DTOs.StockTransfers;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,20 +14,16 @@ public class StockTransfersController : ControllerBase
     private readonly IStockTransferService _stockTransferService;
 
     public StockTransfersController(IStockTransferService stockTransferService)
-    {
-        _stockTransferService = stockTransferService;
-    }
+        => _stockTransferService = stockTransferService;
 
     /// <summary>Tüm transferleri listeler.</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<StockTransfer>>> GetAll(CancellationToken cancellationToken)
-    {
-        return Ok(await _stockTransferService.GetAllAsync(cancellationToken));
-    }
+    public async Task<ActionResult<IReadOnlyList<StockTransferResponse>>> GetAll(CancellationToken cancellationToken)
+        => Ok(await _stockTransferService.GetAllAsync(cancellationToken));
 
     /// <summary>Id ile transfer getirir.</summary>
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<StockTransfer>> GetById(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<StockTransferResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var transfer = await _stockTransferService.GetByIdAsync(id, cancellationToken);
         return transfer is null ? NotFound() : Ok(transfer);
@@ -35,13 +31,13 @@ public class StockTransfersController : ControllerBase
 
     /// <summary>Yeni transfer oluşturur (Pending).</summary>
     [HttpPost]
-    public async Task<ActionResult<StockTransfer>> Create([FromBody] StockTransfer transfer, CancellationToken cancellationToken)
+    public async Task<ActionResult<StockTransferResponse>> Create([FromBody] CreateStockTransferRequest request, CancellationToken cancellationToken)
     {
-        var created = await _stockTransferService.CreateAsync(transfer, cancellationToken);
+        var created = await _stockTransferService.CreateAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
-    /// <summary>Transferi başlatır (InTransit); kaynak depodan stok düşer.</summary>
+    /// <summary>Transferi başlatır (InTransit).</summary>
     [HttpPost("{id:guid}/start")]
     public async Task<IActionResult> Start(Guid id, CancellationToken cancellationToken)
     {
@@ -49,7 +45,7 @@ public class StockTransfersController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Transferi tamamlar (Completed); hedef depoya stok girer.</summary>
+    /// <summary>Transferi tamamlar (Completed).</summary>
     [HttpPost("{id:guid}/complete")]
     public async Task<IActionResult> Complete(Guid id, CancellationToken cancellationToken)
     {

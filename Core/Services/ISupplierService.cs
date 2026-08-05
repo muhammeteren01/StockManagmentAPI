@@ -1,9 +1,14 @@
-using Core.Entities;
+using Core.DTOs.Suppliers;
 
 namespace Core.Services;
 
-/// <summary>Supplier iş kuralları; şirket bazlı tedarikçi yönetimi.</summary>
-public interface ISupplierService : IGenericService<Supplier>
+/// <summary>Supplier iş kuralları (DTO tabanlı).</summary>
+public interface ISupplierService
 {
-    Task<IReadOnlyList<Supplier>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default);
+    Task<SupplierResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SupplierResponse>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SupplierResponse>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default);
+    Task<SupplierResponse> CreateAsync(CreateSupplierRequest request, CancellationToken cancellationToken = default);
+    Task<SupplierResponse> UpdateAsync(Guid id, UpdateSupplierRequest request, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
