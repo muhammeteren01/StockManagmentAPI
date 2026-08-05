@@ -1,5 +1,7 @@
+using Core.DTOs.PurchaseOrders;
 using Core.Entities;
 using Core.Enums;
+using Core.Mappings;
 using Core.Repositories;
 using Core.Services;
 using Core.UnitOfWork;
@@ -7,54 +9,61 @@ using FluentValidation;
 
 namespace Service.Services;
 
-/// <summary>Satın alma siparişi oluşturma, onaylama ve mal kabulünü yönetir.</summary>
-public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrderService
+/// <summary>Satın alma siparişi yönetir (DTO).</summary>
+public class PurchaseOrderService : IPurchaseOrderService
 {
     private readonly IPurchaseOrderRepository _purchaseOrderRepository;
     private readonly IStockTransactionRepository _transactionRepository;
     private readonly IInventoryRepository _inventoryRepository;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IValidator<CreatePurchaseOrderRequest> _createValidator;
 
     public PurchaseOrderService(
-        IPurchaseOrderRepository repository,
+        IPurchaseOrderRepository purchaseOrderRepository,
         IStockTransactionRepository transactionRepository,
         IInventoryRepository inventoryRepository,
         IUnitOfWork unitOfWork,
-        IValidator<PurchaseOrder> validator)
-        : base(repository, unitOfWork, validator)
+        IValidator<CreatePurchaseOrderRequest> createValidator)
     {
-        _purchaseOrderRepository = repository;
+        _purchaseOrderRepository = purchaseOrderRepository;
         _transactionRepository = transactionRepository;
         _inventoryRepository = inventoryRepository;
+        _unitOfWork = unitOfWork;
+        _createValidator = createValidator;
     }
 
-    /// <summary>Belirli şirkete ait satın alma siparişlerini listeler.</summary>
-    public Task<IReadOnlyList<PurchaseOrder>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    /// <summary>Id ile siparişi (kalemler dahil) getirir.</summary>
+    public async Task<PurchaseOrderResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _purchaseOrderRepository.GetByCompanyIdAsync(companyId, cancellationToken);
+        var entity = await _purchaseOrderRepository.GetByIdWithItemsAsync(id, cancellationToken);
+        return entity is null ? null : PurchaseOrderMapper.ToResponse(entity);
     }
 
-    /// <summary>Yeni sipariş oluşturur; toplam tutarı kalemlerden hesaplar.</summary>
-    public override async Task<PurchaseOrder> CreateAsync(PurchaseOrder entity, CancellationToken cancellationToken = default)
+    /// <summary>Tüm siparişleri listeler.</summary>
+    public async Task<IReadOnlyList<PurchaseOrderResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        if (entity.Id == Guid.Empty)
-            entity.Id = Guid.NewGuid();
-
-        foreach (var item in entity.Items ?? [])
-        {
-            if (item.Id == Guid.Empty)
-                item.Id = Guid.NewGuid();
-        }
-
-        entity.Status = PurchaseOrderStatus.Pending;
-        entity.TotalAmount = entity.Items?.Sum(x => x.Quantity * x.UnitPrice) ?? 0;
-
-        if (entity.CreatedAt == default)
-            entity.CreatedAt = DateTime.UtcNow;
-
-        return await base.CreateAsync(entity, cancellationToken);
+        var list = await _purchaseOrderRepository.GetAllAsync(cancellationToken);
+        return list.Select(PurchaseOrderMapper.ToResponse).ToList();
     }
 
-    /// <summary>Pending siparişi onaylar (Approved).</summary>
+    /// <summary>Şirkete ait siparişleri listeler.</summary>
+    public async Task<IReadOnlyList<PurchaseOrderResponse>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        var list = await _purchaseOrderRepository.GetByCompanyIdAsync(companyId, cancellationToken);
+        return list.Select(PurchaseOrderMapper.ToResponse).ToList();
+    }
+
+    /// <summary>Yeni sipariş oluşturur (Pending).</summary>
+    public async Task<PurchaseOrderResponse> CreateAsync(CreatePurchaseOrderRequest request, CancellationToken cancellationToken = default)
+    {
+        await ValidationHelper.EnsureValidAsync(_createValidator, request, cancellationToken);
+        var entity = PurchaseOrderMapper.ToEntity(request);
+        await _purchaseOrderRepository.AddAsync(entity, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return PurchaseOrderMapper.ToResponse(entity);
+    }
+
+    /// <summary>Pending siparişi onaylar.</summary>
     public async Task ApproveAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var order = await _purchaseOrderRepository.GetByIdAsync(id, cancellationToken)
@@ -65,10 +74,10 @@ public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrde
 
         order.Status = PurchaseOrderStatus.Approved;
         _purchaseOrderRepository.Update(order);
-        await UnitOfWork.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Mal kabulü yapar; stok girişi (IN) oluşturur ve received miktarı günceller.</summary>
+    /// <summary>Mal kabulü yapar; stok girişi (IN) oluşturur.</summary>
     public async Task ReceiveAsync(Guid id, IDictionary<Guid, int> receivedQuantities, CancellationToken cancellationToken = default)
     {
         var order = await _purchaseOrderRepository.GetByIdWithItemsAsync(id, cancellationToken)
@@ -123,10 +132,10 @@ public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrde
             : PurchaseOrderStatus.Approved;
 
         _purchaseOrderRepository.Update(order);
-        await UnitOfWork.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Siparişi iptal eder; kısmi kabul yapılmışsa izin vermez.</summary>
+    /// <summary>Siparişi iptal eder.</summary>
     public async Task CancelAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var order = await _purchaseOrderRepository.GetByIdWithItemsAsync(id, cancellationToken)
@@ -140,6 +149,6 @@ public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrde
 
         order.Status = PurchaseOrderStatus.Cancelled;
         _purchaseOrderRepository.Update(order);
-        await UnitOfWork.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

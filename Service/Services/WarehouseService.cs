@@ -1,4 +1,5 @@
-using Core.Entities;
+using Core.DTOs.Warehouses;
+using Core.Mappings;
 using Core.Repositories;
 using Core.Services;
 using Core.UnitOfWork;
@@ -6,32 +7,75 @@ using FluentValidation;
 
 namespace Service.Services;
 
-/// <summary>Warehouse iş kuralları implementasyonu.</summary>
-public class WarehouseService : GenericService<Warehouse>, IWarehouseService
+/// <summary>Warehouse iş kuralları implementasyonu (DTO).</summary>
+public class WarehouseService : IWarehouseService
 {
-    private readonly IWarehouseRepository _warehouseRepository;
+    private readonly IWarehouseRepository _repository;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IValidator<CreateWarehouseRequest> _createValidator;
+    private readonly IValidator<UpdateWarehouseRequest> _updateValidator;
 
     public WarehouseService(
         IWarehouseRepository repository,
         IUnitOfWork unitOfWork,
-        IValidator<Warehouse> validator)
-        : base(repository, unitOfWork, validator)
+        IValidator<CreateWarehouseRequest> createValidator,
+        IValidator<UpdateWarehouseRequest> updateValidator)
     {
-        _warehouseRepository = repository;
+        _repository = repository;
+        _unitOfWork = unitOfWork;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
     }
 
-    /// <summary>Belirli şirkete ait depoları listeler.</summary>
-    public Task<IReadOnlyList<Warehouse>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    /// <summary>Id ile depo getirir.</summary>
+    public async Task<WarehouseResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _warehouseRepository.GetByCompanyIdAsync(companyId, cancellationToken);
+        var entity = await _repository.GetByIdAsync(id, cancellationToken);
+        return entity is null ? null : WarehouseMapper.ToResponse(entity);
     }
 
-    /// <summary>Yeni depo oluşturur; Id boşsa otomatik atanır.</summary>
-    public override async Task<Warehouse> CreateAsync(Warehouse entity, CancellationToken cancellationToken = default)
+    /// <summary>Tüm depoları listeler.</summary>
+    public async Task<IReadOnlyList<WarehouseResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        if (entity.Id == Guid.Empty)
-            entity.Id = Guid.NewGuid();
+        var list = await _repository.GetAllAsync(cancellationToken);
+        return list.Select(WarehouseMapper.ToResponse).ToList();
+    }
 
-        return await base.CreateAsync(entity, cancellationToken);
+    /// <summary>Şirkete ait depoları listeler.</summary>
+    public async Task<IReadOnlyList<WarehouseResponse>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        var list = await _repository.GetByCompanyIdAsync(companyId, cancellationToken);
+        return list.Select(WarehouseMapper.ToResponse).ToList();
+    }
+
+    /// <summary>Yeni depo oluşturur.</summary>
+    public async Task<WarehouseResponse> CreateAsync(CreateWarehouseRequest request, CancellationToken cancellationToken = default)
+    {
+        await ValidationHelper.EnsureValidAsync(_createValidator, request, cancellationToken);
+        var entity = WarehouseMapper.ToEntity(request);
+        await _repository.AddAsync(entity, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return WarehouseMapper.ToResponse(entity);
+    }
+
+    /// <summary>Depoyu günceller.</summary>
+    public async Task<WarehouseResponse> UpdateAsync(Guid id, UpdateWarehouseRequest request, CancellationToken cancellationToken = default)
+    {
+        await ValidationHelper.EnsureValidAsync(_updateValidator, request, cancellationToken);
+        var entity = await _repository.GetByIdAsync(id, cancellationToken)
+            ?? throw new KeyNotFoundException($"Warehouse bulunamadı: {id}");
+        WarehouseMapper.ApplyUpdate(entity, request);
+        _repository.Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return WarehouseMapper.ToResponse(entity);
+    }
+
+    /// <summary>Depoyu siler.</summary>
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _repository.GetByIdAsync(id, cancellationToken)
+            ?? throw new KeyNotFoundException($"Warehouse bulunamadı: {id}");
+        _repository.Remove(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

@@ -1,4 +1,4 @@
-using Core.Entities;
+using Core.DTOs.Suppliers;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,21 +13,16 @@ public class SuppliersController : ControllerBase
 {
     private readonly ISupplierService _supplierService;
 
-    public SuppliersController(ISupplierService supplierService)
-    {
-        _supplierService = supplierService;
-    }
+    public SuppliersController(ISupplierService supplierService) => _supplierService = supplierService;
 
     /// <summary>Tüm tedarikçileri listeler.</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<Supplier>>> GetAll(CancellationToken cancellationToken)
-    {
-        return Ok(await _supplierService.GetAllAsync(cancellationToken));
-    }
+    public async Task<ActionResult<IReadOnlyList<SupplierResponse>>> GetAll(CancellationToken cancellationToken)
+        => Ok(await _supplierService.GetAllAsync(cancellationToken));
 
     /// <summary>Id ile tedarikçi getirir.</summary>
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<Supplier>> GetById(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<SupplierResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var supplier = await _supplierService.GetByIdAsync(id, cancellationToken);
         return supplier is null ? NotFound() : Ok(supplier);
@@ -35,29 +30,21 @@ public class SuppliersController : ControllerBase
 
     /// <summary>Şirkete ait tedarikçileri listeler.</summary>
     [HttpGet("by-company/{companyId:guid}")]
-    public async Task<ActionResult<IReadOnlyList<Supplier>>> GetByCompany(Guid companyId, CancellationToken cancellationToken)
-    {
-        return Ok(await _supplierService.GetByCompanyIdAsync(companyId, cancellationToken));
-    }
+    public async Task<ActionResult<IReadOnlyList<SupplierResponse>>> GetByCompany(Guid companyId, CancellationToken cancellationToken)
+        => Ok(await _supplierService.GetByCompanyIdAsync(companyId, cancellationToken));
 
     /// <summary>Yeni tedarikçi oluşturur.</summary>
     [HttpPost]
-    public async Task<ActionResult<Supplier>> Create([FromBody] Supplier supplier, CancellationToken cancellationToken)
+    public async Task<ActionResult<SupplierResponse>> Create([FromBody] CreateSupplierRequest request, CancellationToken cancellationToken)
     {
-        var created = await _supplierService.CreateAsync(supplier, cancellationToken);
+        var created = await _supplierService.CreateAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     /// <summary>Tedarikçiyi günceller.</summary>
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] Supplier supplier, CancellationToken cancellationToken)
-    {
-        if (id != supplier.Id)
-            return BadRequest("Id uyuşmuyor.");
-
-        await _supplierService.UpdateAsync(supplier, cancellationToken);
-        return NoContent();
-    }
+    public async Task<ActionResult<SupplierResponse>> Update(Guid id, [FromBody] UpdateSupplierRequest request, CancellationToken cancellationToken)
+        => Ok(await _supplierService.UpdateAsync(id, request, cancellationToken));
 
     /// <summary>Tedarikçiyi siler.</summary>
     [HttpDelete("{id:guid}")]

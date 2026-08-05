@@ -1,40 +1,52 @@
-using Core.Entities;
+using Core.DTOs.Inventories;
+using Core.Mappings;
 using Core.Repositories;
 using Core.Services;
-using Core.UnitOfWork;
-using FluentValidation;
 
 namespace Service.Services;
 
-/// <summary>Inventory iş kuralları implementasyonu; stok sorguları.</summary>
-public class InventoryService : GenericService<Inventory>, IInventoryService
+/// <summary>Inventory sorgu implementasyonu (DTO).</summary>
+public class InventoryService : IInventoryService
 {
-    private readonly IInventoryRepository _inventoryRepository;
+    private readonly IInventoryRepository _repository;
 
-    public InventoryService(
-        IInventoryRepository repository,
-        IUnitOfWork unitOfWork,
-        IValidator<Inventory> validator)
-        : base(repository, unitOfWork, validator)
+    public InventoryService(IInventoryRepository repository)
     {
-        _inventoryRepository = repository;
+        _repository = repository;
     }
 
-    /// <summary>Ürün ve depo çiftine göre stok satırını getirir.</summary>
-    public Task<Inventory?> GetByProductAndWarehouseAsync(Guid productId, Guid warehouseId, CancellationToken cancellationToken = default)
+    /// <summary>Id ile stok satırı getirir.</summary>
+    public async Task<InventoryResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _inventoryRepository.GetByProductAndWarehouseAsync(productId, warehouseId, cancellationToken);
+        var entity = await _repository.GetByIdAsync(id, cancellationToken);
+        return entity is null ? null : InventoryMapper.ToResponse(entity);
     }
 
-    /// <summary>Belirli depodaki tüm stok satırlarını listeler.</summary>
-    public Task<IReadOnlyList<Inventory>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default)
+    /// <summary>Tüm stok satırlarını listeler.</summary>
+    public async Task<IReadOnlyList<InventoryResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return _inventoryRepository.GetByWarehouseIdAsync(warehouseId, cancellationToken);
+        var list = await _repository.GetAllAsync(cancellationToken);
+        return list.Select(InventoryMapper.ToResponse).ToList();
     }
 
-    /// <summary>Belirli ürünün tüm depolardaki stoklarını listeler.</summary>
-    public Task<IReadOnlyList<Inventory>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default)
+    /// <summary>Ürün + depo stok satırını getirir.</summary>
+    public async Task<InventoryResponse?> GetByProductAndWarehouseAsync(Guid productId, Guid warehouseId, CancellationToken cancellationToken = default)
     {
-        return _inventoryRepository.GetByProductIdAsync(productId, cancellationToken);
+        var entity = await _repository.GetByProductAndWarehouseAsync(productId, warehouseId, cancellationToken);
+        return entity is null ? null : InventoryMapper.ToResponse(entity);
+    }
+
+    /// <summary>Depodaki stokları listeler.</summary>
+    public async Task<IReadOnlyList<InventoryResponse>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default)
+    {
+        var list = await _repository.GetByWarehouseIdAsync(warehouseId, cancellationToken);
+        return list.Select(InventoryMapper.ToResponse).ToList();
+    }
+
+    /// <summary>Ürünün tüm depolardaki stoklarını listeler.</summary>
+    public async Task<IReadOnlyList<InventoryResponse>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default)
+    {
+        var list = await _repository.GetByProductIdAsync(productId, cancellationToken);
+        return list.Select(InventoryMapper.ToResponse).ToList();
     }
 }

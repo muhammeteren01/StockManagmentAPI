@@ -1,5 +1,7 @@
+using Core.DTOs.StockTransactions;
 using Core.Entities;
 using Core.Enums;
+using Core.Mappings;
 using Core.Repositories;
 using Core.Services;
 using Core.UnitOfWork;
@@ -7,53 +9,67 @@ using FluentValidation;
 
 namespace Service.Services;
 
-/// <summary>Stok hareketi oluşturur; Inventory miktarını TransactionType'a göre günceller.</summary>
-public class StockTransactionService : GenericService<StockTransaction>, IStockTransactionService
+/// <summary>Stok hareketi oluşturur; Inventory'yi günceller (DTO).</summary>
+public class StockTransactionService : IStockTransactionService
 {
     private readonly IStockTransactionRepository _transactionRepository;
     private readonly IInventoryRepository _inventoryRepository;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IValidator<CreateStockTransactionRequest> _createValidator;
 
     public StockTransactionService(
-        IStockTransactionRepository repository,
+        IStockTransactionRepository transactionRepository,
         IInventoryRepository inventoryRepository,
         IUnitOfWork unitOfWork,
-        IValidator<StockTransaction> validator)
-        : base(repository, unitOfWork, validator)
+        IValidator<CreateStockTransactionRequest> createValidator)
     {
-        _transactionRepository = repository;
+        _transactionRepository = transactionRepository;
         _inventoryRepository = inventoryRepository;
+        _unitOfWork = unitOfWork;
+        _createValidator = createValidator;
     }
 
-    /// <summary>Ürüne ait stok hareketlerini listeler.</summary>
-    public Task<IReadOnlyList<StockTransaction>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default)
+    /// <summary>Id ile stok hareketi getirir.</summary>
+    public async Task<StockTransactionResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _transactionRepository.GetByProductIdAsync(productId, cancellationToken);
+        var entity = await _transactionRepository.GetByIdAsync(id, cancellationToken);
+        return entity is null ? null : StockTransactionMapper.ToResponse(entity);
     }
 
-    /// <summary>Depoya ait stok hareketlerini listeler.</summary>
-    public Task<IReadOnlyList<StockTransaction>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default)
+    /// <summary>Tüm stok hareketlerini listeler.</summary>
+    public async Task<IReadOnlyList<StockTransactionResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return _transactionRepository.GetByWarehouseIdAsync(warehouseId, cancellationToken);
+        var list = await _transactionRepository.GetAllAsync(cancellationToken);
+        return list.Select(StockTransactionMapper.ToResponse).ToList();
+    }
+
+    /// <summary>Ürüne ait hareketleri listeler.</summary>
+    public async Task<IReadOnlyList<StockTransactionResponse>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default)
+    {
+        var list = await _transactionRepository.GetByProductIdAsync(productId, cancellationToken);
+        return list.Select(StockTransactionMapper.ToResponse).ToList();
+    }
+
+    /// <summary>Depoya ait hareketleri listeler.</summary>
+    public async Task<IReadOnlyList<StockTransactionResponse>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default)
+    {
+        var list = await _transactionRepository.GetByWarehouseIdAsync(warehouseId, cancellationToken);
+        return list.Select(StockTransactionMapper.ToResponse).ToList();
     }
 
     /// <summary>Stok hareketi kaydı oluşturur ve Inventory miktarını günceller.</summary>
-    public override async Task<StockTransaction> CreateAsync(StockTransaction entity, CancellationToken cancellationToken = default)
+    public async Task<StockTransactionResponse> CreateAsync(CreateStockTransactionRequest request, CancellationToken cancellationToken = default)
     {
-        await ValidateAsync(entity, cancellationToken);
+        await ValidationHelper.EnsureValidAsync(_createValidator, request, cancellationToken);
 
-        if (entity.Id == Guid.Empty)
-            entity.Id = Guid.NewGuid();
-
-        if (entity.TransactionDate == default)
-            entity.TransactionDate = DateTime.UtcNow;
-
+        var entity = StockTransactionMapper.ToEntity(request);
         var inventory = await GetOrCreateInventoryAsync(entity.ProductId, entity.WarehouseId, cancellationToken);
         ApplyQuantityChange(inventory, entity.TransactionType, entity.Quantity);
         inventory.LastUpdated = DateTime.UtcNow;
 
         await _transactionRepository.AddAsync(entity, cancellationToken);
-        await UnitOfWork.SaveChangesAsync(cancellationToken);
-        return entity;
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return StockTransactionMapper.ToResponse(entity);
     }
 
     /// <summary>Ürün-depo stok satırını bulur; yoksa sıfır miktarla oluşturur.</summary>
@@ -71,7 +87,6 @@ public class StockTransactionService : GenericService<StockTransaction>, IStockT
             Quantity = 0,
             LastUpdated = DateTime.UtcNow
         };
-
         await _inventoryRepository.AddAsync(inventory, cancellationToken);
         return inventory;
     }
