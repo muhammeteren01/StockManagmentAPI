@@ -1,9 +1,8 @@
 using System.Security.Claims;
-using API.Middleware;
 using Serilog;
 using Serilog.Events;
 
-namespace API;
+namespace API.Middleware;
 
 /// <summary>Logging middleware kayıt yardımcıları.</summary>
 public static class MiddlewareExtensions
