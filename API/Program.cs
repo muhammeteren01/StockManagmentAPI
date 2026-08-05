@@ -1,5 +1,7 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using Core.Validations.Users;
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Repository.Data;
 using Repository.DependencyResolvers;
@@ -16,6 +18,7 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddValidatorsFromAssemblyContaining<UserValidator>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {

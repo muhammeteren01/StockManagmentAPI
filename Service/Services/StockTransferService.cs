@@ -3,6 +3,7 @@ using Core.Enums;
 using Core.Repositories;
 using Core.Services;
 using Core.UnitOfWork;
+using FluentValidation;
 
 namespace Service.Services;
 
@@ -17,32 +18,25 @@ public class StockTransferService : GenericService<StockTransfer>, IStockTransfe
         IStockTransferRepository repository,
         IStockTransactionRepository transactionRepository,
         IInventoryRepository inventoryRepository,
-        IUnitOfWork unitOfWork)
-        : base(repository, unitOfWork)
+        IUnitOfWork unitOfWork,
+        IValidator<StockTransfer> validator)
+        : base(repository, unitOfWork, validator)
     {
         _transferRepository = repository;
         _transactionRepository = transactionRepository;
         _inventoryRepository = inventoryRepository;
     }
 
+    /// <summary>Yeni transfer oluşturur; durum Pending olarak başlar.</summary>
     public override async Task<StockTransfer> CreateAsync(StockTransfer entity, CancellationToken cancellationToken = default)
     {
-        if (entity.FromWarehouseId == entity.ToWarehouseId)
-            throw new InvalidOperationException("Kaynak ve hedef depo aynı olamaz.");
-
-        if (entity.Items is null || entity.Items.Count == 0)
-            throw new InvalidOperationException("Transfer en az bir kalem içermelidir.");
-
         if (entity.Id == Guid.Empty)
             entity.Id = Guid.NewGuid();
 
-        foreach (var item in entity.Items)
+        foreach (var item in entity.Items ?? [])
         {
             if (item.Id == Guid.Empty)
                 item.Id = Guid.NewGuid();
-
-            if (item.Quantity <= 0)
-                throw new InvalidOperationException("Transfer kalem quantity pozitif olmalıdır.");
         }
 
         entity.Status = StockTransferStatus.Pending;
@@ -52,6 +46,7 @@ public class StockTransferService : GenericService<StockTransfer>, IStockTransfe
         return await base.CreateAsync(entity, cancellationToken);
     }
 
+    /// <summary>Transferi başlatır; kaynak depodan stok düşer (InTransit).</summary>
     public async Task StartAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var transfer = await _transferRepository.GetByIdWithItemsAsync(id, cancellationToken)
@@ -77,6 +72,7 @@ public class StockTransferService : GenericService<StockTransfer>, IStockTransfe
         await UnitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Transferi tamamlar; hedef depoya stok girer (Completed).</summary>
     public async Task CompleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var transfer = await _transferRepository.GetByIdWithItemsAsync(id, cancellationToken)
@@ -103,6 +99,7 @@ public class StockTransferService : GenericService<StockTransfer>, IStockTransfe
         await UnitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Transferi iptal eder; yoldaki stok varsa kaynak depoya iade edilir.</summary>
     public async Task CancelAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var transfer = await _transferRepository.GetByIdWithItemsAsync(id, cancellationToken)
@@ -132,6 +129,7 @@ public class StockTransferService : GenericService<StockTransfer>, IStockTransfe
         await UnitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Transfer kalemi için stok ve transaction kaydı uygular.</summary>
     private async Task ApplyStockChangeAsync(
         Guid productId,
         Guid warehouseId,
