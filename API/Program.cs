@@ -11,50 +11,77 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Repository.Data;
 using Repository.DependencyResolvers;
+using Serilog;
 using Service.DependencyResolvers;
 
-var builder = WebApplication.CreateBuilder(args);
+Log.Logger = new LoggerConfiguration()
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
-builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
+try
 {
-    containerBuilder.RegisterModule(new AutofacRepositoryModule());
-    containerBuilder.RegisterModule(new AutofacServiceModule());
-});
+    var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
-builder.Services.AddProblemDetails();
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUser, CurrentUser>();
-builder.Services.Configure<SeedSettings>(builder.Configuration.GetSection(SeedSettings.SectionName));
-builder.Services.AddSwaggerDocumentation();
-builder.Services.AddJwtAuthentication(builder.Configuration);
-builder.Services.AddValidatorsFromAssemblyContaining<UserValidator>();
+    builder.Host.UseSerilog((context, services, configuration) =>
+        configuration.ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services)
+            .Enrich.FromLogContext());
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
-});
-
-var app = builder.Build();
-
-app.UseExceptionHandler();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
+    builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
+    builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Stock Management API v1");
-        options.RoutePrefix = "swagger";
+        containerBuilder.RegisterModule(new AutofacRepositoryModule());
+        containerBuilder.RegisterModule(new AutofacServiceModule());
     });
+
+    builder.Services.AddControllers();
+    builder.Services.AddProblemDetails();
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+    builder.Services.Configure<SeedSettings>(builder.Configuration.GetSection(SeedSettings.SectionName));
+    builder.Services.AddSwaggerDocumentation();
+    builder.Services.AddJwtAuthentication(builder.Configuration);
+    builder.Services.AddValidatorsFromAssemblyContaining<UserValidator>();
+
+    builder.Services.AddDbContext<AppDbContext>(options =>
+    {
+        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    });
+
+    var app = builder.Build();
+
+    // Dıştan içe: CorrelationId → RequestLogging → ExceptionHandler
+    app.UseCorrelationId();
+    app.UseRequestLogging();
+    app.UseExceptionHandler();
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI(options =>
+        {
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "Stock Management API v1");
+            options.RoutePrefix = "swagger";
+        });
+    }
+
+    await DbSeeder.SeedSuperAdminAsync(app.Services);
+
+    app.UseHttpsRedirection();
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapControllers();
+
+    Log.Information("Application starting. Environment={Environment}", app.Environment.EnvironmentName);
+    app.Run();
 }
-
-await DbSeeder.SeedSuperAdminAsync(app.Services);
-
-app.UseHttpsRedirection();
-app.UseAuthentication();
-app.UseAuthorization();
-app.MapControllers();
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
