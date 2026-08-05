@@ -21,7 +21,7 @@ public static class TenantGuard
         }
 
         if (!currentUser.CompanyId.HasValue || currentUser.CompanyId.Value == Guid.Empty)
-            throw new UnauthorizedException("Şirket bilgisi bulunamadı.");
+            throw new ForbiddenException("Şirket bilgisi bulunamadı.");
 
         return currentUser.CompanyId.Value;
     }
@@ -30,7 +30,7 @@ public static class TenantGuard
     public static Guid RequireUserId(ICurrentUser currentUser)
     {
         if (!currentUser.UserId.HasValue || currentUser.UserId.Value == Guid.Empty)
-            throw new UnauthorizedException("Kullanıcı kimliği bulunamadı.");
+            throw new ForbiddenException("Kullanıcı kimliği bulunamadı.");
         return currentUser.UserId.Value;
     }
 
@@ -41,14 +41,14 @@ public static class TenantGuard
             return;
 
         if (!currentUser.CompanyId.HasValue || currentUser.CompanyId.Value != companyId)
-            throw new UnauthorizedException("Bu şirkete erişim yetkiniz yok.");
+            throw new ForbiddenException("Bu şirkete erişim yetkiniz yok.");
     }
 
     /// <summary>Yalnızca SuperAdmin SuperAdmin rolü atayabilir.</summary>
     public static void EnsureCanAssignRole(ICurrentUser currentUser, UserRole targetRole)
     {
         if (targetRole == UserRole.SuperAdmin && !currentUser.IsSuperAdmin)
-            throw new UnauthorizedException("SuperAdmin rolü yalnızca SuperAdmin tarafından atanabilir.");
+            throw new ForbiddenException("SuperAdmin rolü yalnızca SuperAdmin tarafından atanabilir.");
     }
 
     /// <summary>Kullanıcı oluştururken CompanyId: SuperAdmin rolünde null; aksi halde ResolveCompanyId.</summary>
