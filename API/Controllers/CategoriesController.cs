@@ -1,0 +1,69 @@
+using Core.Entities;
+using Core.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+
+/// <summary>Kategori CRUD endpoint'leri.</summary>
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class CategoriesController : ControllerBase
+{
+    private readonly ICategoryService _categoryService;
+
+    public CategoriesController(ICategoryService categoryService)
+    {
+        _categoryService = categoryService;
+    }
+
+    /// <summary>Tüm kategorileri listeler.</summary>
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<Category>>> GetAll(CancellationToken cancellationToken)
+    {
+        return Ok(await _categoryService.GetAllAsync(cancellationToken));
+    }
+
+    /// <summary>Id ile kategori getirir.</summary>
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<Category>> GetById(Guid id, CancellationToken cancellationToken)
+    {
+        var category = await _categoryService.GetByIdAsync(id, cancellationToken);
+        return category is null ? NotFound() : Ok(category);
+    }
+
+    /// <summary>Şirkete ait kategorileri listeler.</summary>
+    [HttpGet("by-company/{companyId:guid}")]
+    public async Task<ActionResult<IReadOnlyList<Category>>> GetByCompany(Guid companyId, CancellationToken cancellationToken)
+    {
+        return Ok(await _categoryService.GetByCompanyIdAsync(companyId, cancellationToken));
+    }
+
+    /// <summary>Yeni kategori oluşturur.</summary>
+    [HttpPost]
+    public async Task<ActionResult<Category>> Create([FromBody] Category category, CancellationToken cancellationToken)
+    {
+        var created = await _categoryService.CreateAsync(category, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    /// <summary>Kategoriyi günceller.</summary>
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] Category category, CancellationToken cancellationToken)
+    {
+        if (id != category.Id)
+            return BadRequest("Id uyuşmuyor.");
+
+        await _categoryService.UpdateAsync(category, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Kategoriyi siler.</summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await _categoryService.DeleteAsync(id, cancellationToken);
+        return NoContent();
+    }
+}
