@@ -1,4 +1,6 @@
+using Core.Exceptions;
 using Core.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
 using Repository.Data;
 
 namespace Repository.UnitOfWork;
@@ -13,8 +15,17 @@ public class UnitOfWork : IUnitOfWork
         _context = context;
     }
 
-    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    /// <summary>Değişiklikleri kaydeder; concurrent inventory güncellemelerinde ConflictException fırlatır.</summary>
+    public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        return _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            return await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictException(
+                "Stok kaydı başka bir işlem tarafından güncellendi. Lütfen tekrar deneyin.");
+        }
     }
 }
