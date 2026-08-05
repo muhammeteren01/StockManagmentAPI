@@ -16,6 +16,9 @@ public class Inventory
 
     public DateTime LastUpdated { get; set; }
 
+    /// <summary>Optimistic concurrency token (SQL Server rowversion).</summary>
+    public byte[] RowVersion { get; set; } = null!;
+
     public Company Company { get; set; } = null!;
     public Product Product { get; set; } = null!;
     public Warehouse Warehouse { get; set; } = null!;

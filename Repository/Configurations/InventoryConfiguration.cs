@@ -19,6 +19,7 @@ public class InventoryConfiguration : IEntityTypeConfiguration<Inventory>
         builder.Property(x => x.WarehouseId).HasColumnName("warehouse_id").IsRequired();
         builder.Property(x => x.Quantity).HasColumnName("quantity").IsRequired();
         builder.Property(x => x.LastUpdated).HasColumnName("last_updated").IsRequired();
+        builder.Property(x => x.RowVersion).HasColumnName("row_version").IsRowVersion();
 
         builder.HasIndex(x => new { x.ProductId, x.WarehouseId }).IsUnique();
         builder.HasIndex(x => x.CompanyId);
