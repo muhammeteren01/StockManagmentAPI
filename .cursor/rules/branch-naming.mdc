@@ -1,0 +1,18 @@
+---
+description: Git branch adlandırma kuralı (dev/ ve feature/)
+alwaysApply: true
+---
+
+# Branch Adlandırma
+
+Yeni branch oluştururken prefix kullan:
+
+- **`dev/`** — Yeni bir yenilik / yeni bir yaklaşım / sıfırdan eklenen yeni bir konsept
+  (örn. `dev/multi-tenant-auth`, `dev/realtime-stock-hub`)
+- **`feature/`** — Mevcut mimari üzerinde geliştirme, eksik katman/özellik tamamlama
+  (örn. `feature/core-repository-interfaces`, `feature/purchase-order-receive`)
+
+Kurallar:
+- Prefix'ten sonra kısa, kebab-case isim kullan.
+- Commit istenmeden branch push etme; kullanıcı adım adım commit/push ister.
+- Anlamsız isimler kullanma (`feature/test`, `dev/yeni` vb.).
