@@ -1,3 +1,4 @@
+using Core.Authorization;
 using Core.DTOs.Users;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -5,10 +6,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
-/// <summary>Kullanıcı CRUD endpoint'leri.</summary>
+/// <summary>Kullanıcı CRUD endpoint'leri. SuperAdmin / CompanyAdmin.</summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = AppRoles.CompanyAdmins)]
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;

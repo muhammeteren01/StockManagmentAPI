@@ -1,3 +1,4 @@
+using Core.Authorization;
 using Core.DTOs.Inventories;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +9,7 @@ namespace API.Controllers;
 /// <summary>Stok (inventory) sorgulama endpoint'leri.</summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = AppRoles.All)]
 public class InventoriesController : ControllerBase
 {
     private readonly IInventoryService _inventoryService;

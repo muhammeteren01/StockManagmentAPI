@@ -1,3 +1,4 @@
+using Core.Authorization;
 using Core.DTOs.PurchaseOrders;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -18,11 +19,13 @@ public class PurchaseOrdersController : ControllerBase
 
     /// <summary>Tüm siparişleri listeler.</summary>
     [HttpGet]
+    [Authorize(Roles = AppRoles.All)]
     public async Task<ActionResult<IReadOnlyList<PurchaseOrderResponse>>> GetAll(CancellationToken cancellationToken)
         => Ok(await _purchaseOrderService.GetAllAsync(cancellationToken));
 
     /// <summary>Id ile sipariş getirir.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = AppRoles.All)]
     public async Task<ActionResult<PurchaseOrderResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var order = await _purchaseOrderService.GetByIdAsync(id, cancellationToken);
@@ -31,11 +34,13 @@ public class PurchaseOrdersController : ControllerBase
 
     /// <summary>Şirkete ait siparişleri listeler.</summary>
     [HttpGet("by-company/{companyId:guid}")]
+    [Authorize(Roles = AppRoles.All)]
     public async Task<ActionResult<IReadOnlyList<PurchaseOrderResponse>>> GetByCompany(Guid companyId, CancellationToken cancellationToken)
         => Ok(await _purchaseOrderService.GetByCompanyIdAsync(companyId, cancellationToken));
 
     /// <summary>Yeni sipariş oluşturur (Pending).</summary>
     [HttpPost]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<ActionResult<PurchaseOrderResponse>> Create([FromBody] CreatePurchaseOrderRequest request, CancellationToken cancellationToken)
     {
         var created = await _purchaseOrderService.CreateAsync(request, cancellationToken);
@@ -44,6 +49,7 @@ public class PurchaseOrdersController : ControllerBase
 
     /// <summary>Siparişi onaylar (Approved).</summary>
     [HttpPost("{id:guid}/approve")]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<IActionResult> Approve(Guid id, CancellationToken cancellationToken)
     {
         await _purchaseOrderService.ApproveAsync(id, cancellationToken);
@@ -52,6 +58,7 @@ public class PurchaseOrdersController : ControllerBase
 
     /// <summary>Mal kabulü yapar; stok girişi (IN) oluşur.</summary>
     [HttpPost("{id:guid}/receive")]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<IActionResult> Receive(Guid id, [FromBody] ReceivePurchaseOrderRequest request, CancellationToken cancellationToken)
     {
         await _purchaseOrderService.ReceiveAsync(id, request.ReceivedQuantities, cancellationToken);
@@ -60,6 +67,7 @@ public class PurchaseOrdersController : ControllerBase
 
     /// <summary>Siparişi iptal eder.</summary>
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)
     {
         await _purchaseOrderService.CancelAsync(id, cancellationToken);

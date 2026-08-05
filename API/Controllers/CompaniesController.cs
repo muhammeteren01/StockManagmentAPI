@@ -1,3 +1,4 @@
+using Core.Authorization;
 using Core.DTOs.Companies;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -5,10 +6,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
-/// <summary>Şirket CRUD endpoint'leri.</summary>
+/// <summary>Şirket CRUD endpoint'leri. Yalnızca SuperAdmin.</summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = AppRoles.SuperAdminOnly)]
 public class CompaniesController : ControllerBase
 {
     private readonly ICompanyService _companyService;
