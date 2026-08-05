@@ -1,0 +1,33 @@
+using Core.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace Repository.Configurations;
+
+/// <summary>PurchaseOrderItem tablosu Fluent API yapılandırması.</summary>
+public class PurchaseOrderItemConfiguration : IEntityTypeConfiguration<PurchaseOrderItem>
+{
+    public void Configure(EntityTypeBuilder<PurchaseOrderItem> builder)
+    {
+        builder.ToTable("purchase_order_items");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Id).HasColumnName("id");
+        builder.Property(x => x.PurchaseOrderId).HasColumnName("purchase_order_id").IsRequired();
+        builder.Property(x => x.ProductId).HasColumnName("product_id").IsRequired();
+        builder.Property(x => x.Quantity).HasColumnName("quantity").IsRequired();
+        builder.Property(x => x.UnitPrice).HasColumnName("unit_price").HasColumnType("decimal(18,2)").IsRequired();
+        builder.Property(x => x.ReceivedQuantity).HasColumnName("received_quantity").IsRequired();
+
+        builder.HasOne(x => x.PurchaseOrder)
+            .WithMany(x => x.Items)
+            .HasForeignKey(x => x.PurchaseOrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.Product)
+            .WithMany(x => x.PurchaseOrderItems)
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
