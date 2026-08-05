@@ -1,0 +1,35 @@
+---
+description: C# dosyalarında Türkçe yorum standardı
+globs: **/*.cs
+alwaysApply: false
+---
+
+# Yorum Standardı (Türkçe)
+
+## Entity'ler (Core/Entities)
+
+- Class başına sorumluluğu anlatan `<summary>` yaz.
+- İş kuralı veya özel anlamı olan property'lere `<summary>` yaz
+  (örn. "Şirket bazında unique olmalı", "Null ise Super Admin").
+- Sıradan property'lere (Name, Phone, CreatedAt vb.) yorum yazma.
+
+## Enum'lar (Core/Enums)
+
+- Sadece enum'un başına tek satırlık `<summary>` yaz; değerlere yorum yazma.
+
+## Service, Repository, Controller
+
+- Class/interface başına 1-2 satırlık `<summary>` yaz.
+- Metot başına ne yaptığını ve önemli iş kuralını anlatan tek satırlık `<summary>` yaz.
+- Kod satırlarına satır satır yorum yazma.
+
+## Örnek
+
+```csharp
+/// <summary>Stok hareketlerini yönetir; inventory günceller ve transaction kaydı düşer.</summary>
+public class StockTransactionService : IStockTransactionService
+{
+    /// <summary>Yeni stok hareketi oluşturur; OUT işleminde stok yetersizse hata fırlatır.</summary>
+    public Task<StockTransactionDto> CreateAsync(CreateStockTransactionRequest request) { ... }
+}
+```
