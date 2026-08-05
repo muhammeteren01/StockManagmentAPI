@@ -3,6 +3,7 @@ using Core.Enums;
 using Core.Repositories;
 using Core.Services;
 using Core.UnitOfWork;
+using FluentValidation;
 
 namespace Service.Services;
 
@@ -15,27 +16,30 @@ public class StockTransactionService : GenericService<StockTransaction>, IStockT
     public StockTransactionService(
         IStockTransactionRepository repository,
         IInventoryRepository inventoryRepository,
-        IUnitOfWork unitOfWork)
-        : base(repository, unitOfWork)
+        IUnitOfWork unitOfWork,
+        IValidator<StockTransaction> validator)
+        : base(repository, unitOfWork, validator)
     {
         _transactionRepository = repository;
         _inventoryRepository = inventoryRepository;
     }
 
+    /// <summary>Ürüne ait stok hareketlerini listeler.</summary>
     public Task<IReadOnlyList<StockTransaction>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default)
     {
         return _transactionRepository.GetByProductIdAsync(productId, cancellationToken);
     }
 
+    /// <summary>Depoya ait stok hareketlerini listeler.</summary>
     public Task<IReadOnlyList<StockTransaction>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default)
     {
         return _transactionRepository.GetByWarehouseIdAsync(warehouseId, cancellationToken);
     }
 
+    /// <summary>Stok hareketi kaydı oluşturur ve Inventory miktarını günceller.</summary>
     public override async Task<StockTransaction> CreateAsync(StockTransaction entity, CancellationToken cancellationToken = default)
     {
-        if (entity.Quantity <= 0)
-            throw new InvalidOperationException("Quantity her zaman pozitif olmalıdır.");
+        await ValidateAsync(entity, cancellationToken);
 
         if (entity.Id == Guid.Empty)
             entity.Id = Guid.NewGuid();
@@ -52,6 +56,7 @@ public class StockTransactionService : GenericService<StockTransaction>, IStockT
         return entity;
     }
 
+    /// <summary>Ürün-depo stok satırını bulur; yoksa sıfır miktarla oluşturur.</summary>
     private async Task<Inventory> GetOrCreateInventoryAsync(Guid productId, Guid warehouseId, CancellationToken cancellationToken)
     {
         var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(productId, warehouseId, cancellationToken);
@@ -71,6 +76,7 @@ public class StockTransactionService : GenericService<StockTransaction>, IStockT
         return inventory;
     }
 
+    /// <summary>Hareket tipine göre stok miktarını artırır veya azaltır.</summary>
     private static void ApplyQuantityChange(Inventory inventory, TransactionType type, int quantity)
     {
         var delta = type switch

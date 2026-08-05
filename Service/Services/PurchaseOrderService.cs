@@ -3,6 +3,7 @@ using Core.Enums;
 using Core.Repositories;
 using Core.Services;
 using Core.UnitOfWork;
+using FluentValidation;
 
 namespace Service.Services;
 
@@ -17,38 +18,35 @@ public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrde
         IPurchaseOrderRepository repository,
         IStockTransactionRepository transactionRepository,
         IInventoryRepository inventoryRepository,
-        IUnitOfWork unitOfWork)
-        : base(repository, unitOfWork)
+        IUnitOfWork unitOfWork,
+        IValidator<PurchaseOrder> validator)
+        : base(repository, unitOfWork, validator)
     {
         _purchaseOrderRepository = repository;
         _transactionRepository = transactionRepository;
         _inventoryRepository = inventoryRepository;
     }
 
+    /// <summary>Belirli şirkete ait satın alma siparişlerini listeler.</summary>
     public Task<IReadOnlyList<PurchaseOrder>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
     {
         return _purchaseOrderRepository.GetByCompanyIdAsync(companyId, cancellationToken);
     }
 
+    /// <summary>Yeni sipariş oluşturur; toplam tutarı kalemlerden hesaplar.</summary>
     public override async Task<PurchaseOrder> CreateAsync(PurchaseOrder entity, CancellationToken cancellationToken = default)
     {
-        if (entity.Items is null || entity.Items.Count == 0)
-            throw new InvalidOperationException("Sipariş en az bir kalem içermelidir.");
-
         if (entity.Id == Guid.Empty)
             entity.Id = Guid.NewGuid();
 
-        foreach (var item in entity.Items)
+        foreach (var item in entity.Items ?? [])
         {
             if (item.Id == Guid.Empty)
                 item.Id = Guid.NewGuid();
-
-            if (item.Quantity <= 0)
-                throw new InvalidOperationException("Sipariş kalem quantity pozitif olmalıdır.");
         }
 
         entity.Status = PurchaseOrderStatus.Pending;
-        entity.TotalAmount = entity.Items.Sum(x => x.Quantity * x.UnitPrice);
+        entity.TotalAmount = entity.Items?.Sum(x => x.Quantity * x.UnitPrice) ?? 0;
 
         if (entity.CreatedAt == default)
             entity.CreatedAt = DateTime.UtcNow;
@@ -56,6 +54,7 @@ public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrde
         return await base.CreateAsync(entity, cancellationToken);
     }
 
+    /// <summary>Pending siparişi onaylar (Approved).</summary>
     public async Task ApproveAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var order = await _purchaseOrderRepository.GetByIdAsync(id, cancellationToken)
@@ -69,6 +68,7 @@ public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrde
         await UnitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Mal kabulü yapar; stok girişi (IN) oluşturur ve received miktarı günceller.</summary>
     public async Task ReceiveAsync(Guid id, IDictionary<Guid, int> receivedQuantities, CancellationToken cancellationToken = default)
     {
         var order = await _purchaseOrderRepository.GetByIdWithItemsAsync(id, cancellationToken)
@@ -126,6 +126,7 @@ public class PurchaseOrderService : GenericService<PurchaseOrder>, IPurchaseOrde
         await UnitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Siparişi iptal eder; kısmi kabul yapılmışsa izin vermez.</summary>
     public async Task CancelAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var order = await _purchaseOrderRepository.GetByIdWithItemsAsync(id, cancellationToken)

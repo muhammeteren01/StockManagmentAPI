@@ -2,6 +2,7 @@ using Core.Entities;
 using Core.Repositories;
 using Core.Services;
 using Core.UnitOfWork;
+using FluentValidation;
 
 namespace Service.Services;
 
@@ -10,17 +11,22 @@ public class SupplierService : GenericService<Supplier>, ISupplierService
 {
     private readonly ISupplierRepository _supplierRepository;
 
-    public SupplierService(ISupplierRepository repository, IUnitOfWork unitOfWork)
-        : base(repository, unitOfWork)
+    public SupplierService(
+        ISupplierRepository repository,
+        IUnitOfWork unitOfWork,
+        IValidator<Supplier> validator)
+        : base(repository, unitOfWork, validator)
     {
         _supplierRepository = repository;
     }
 
+    /// <summary>Belirli şirkete ait tedarikçileri listeler.</summary>
     public Task<IReadOnlyList<Supplier>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
     {
         return _supplierRepository.GetByCompanyIdAsync(companyId, cancellationToken);
     }
 
+    /// <summary>Yeni tedarikçi oluşturur; Id ve CreatedAt boşsa otomatik atanır.</summary>
     public override async Task<Supplier> CreateAsync(Supplier entity, CancellationToken cancellationToken = default)
     {
         if (entity.Id == Guid.Empty)
