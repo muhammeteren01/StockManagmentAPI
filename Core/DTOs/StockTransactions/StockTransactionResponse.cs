@@ -6,6 +6,7 @@ namespace Core.DTOs.StockTransactions;
 public class StockTransactionResponse
 {
     public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
     public Guid ProductId { get; set; }
     public Guid WarehouseId { get; set; }
     public Guid UserId { get; set; }

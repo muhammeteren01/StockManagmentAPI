@@ -15,6 +15,7 @@ public class UserRepository : GenericRepository<User>, IUserRepository
     public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return await DbSet.AsNoTracking()
+            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.Email == email, cancellationToken);
     }
 

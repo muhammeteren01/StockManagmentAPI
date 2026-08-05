@@ -9,6 +9,7 @@ namespace Core.Entities;
 public class StockTransfer
 {
     public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
     public Guid FromWarehouseId { get; set; }
     public Guid ToWarehouseId { get; set; }
     public Guid UserId { get; set; }
@@ -23,6 +24,7 @@ public class StockTransfer
     /// <summary>Yoldaki (In_Transit) stoklar inventory tablosunda DEĞİL, bu transferin kalemlerinden (items) hesaplanır.</summary>
     public string? Notes { get; set; }
 
+    public Company Company { get; set; } = null!;
     public Warehouse FromWarehouse { get; set; } = null!;
     public Warehouse ToWarehouse { get; set; } = null!;
     public User User { get; set; } = null!;

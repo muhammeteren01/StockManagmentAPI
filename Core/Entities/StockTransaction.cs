@@ -10,6 +10,7 @@ namespace Core.Entities;
 public class StockTransaction
 {
     public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
     public Guid ProductId { get; set; }
     public Guid WarehouseId { get; set; }
     public Guid UserId { get; set; }
@@ -33,6 +34,7 @@ public class StockTransaction
     public string? Notes { get; set; }
     public DateTime TransactionDate { get; set; }
 
+    public Company Company { get; set; } = null!;
     public Product Product { get; set; } = null!;
     public Warehouse Warehouse { get; set; } = null!;
     public User User { get; set; } = null!;

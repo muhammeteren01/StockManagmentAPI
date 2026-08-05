@@ -7,10 +7,10 @@ namespace Core.Mappings;
 /// <summary>User entity ↔ DTO dönüşümleri.</summary>
 public static class UserMapper
 {
-    public static User ToEntity(CreateUserRequest request, string passwordHash) => new()
+    public static User ToEntity(CreateUserRequest request, string passwordHash, Guid? companyId) => new()
     {
         Id = Guid.NewGuid(),
-        CompanyId = request.Role == UserRole.SuperAdmin ? null : request.CompanyId,
+        CompanyId = companyId,
         FirstName = request.FirstName,
         LastName = request.LastName,
         Email = request.Email,
@@ -20,12 +20,12 @@ public static class UserMapper
         CreatedAt = DateTime.UtcNow
     };
 
-    public static void ApplyUpdate(User entity, UpdateUserRequest request)
+    public static void ApplyUpdate(User entity, UpdateUserRequest request, Guid? companyId)
     {
         entity.FirstName = request.FirstName;
         entity.LastName = request.LastName;
         entity.Email = request.Email;
-        entity.CompanyId = request.Role == UserRole.SuperAdmin ? null : request.CompanyId;
+        entity.CompanyId = companyId;
         entity.Role = request.Role;
         entity.IsActive = request.IsActive;
     }

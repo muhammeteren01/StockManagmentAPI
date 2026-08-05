@@ -8,7 +8,6 @@ public class CreateSupplierRequestValidator : AbstractValidator<CreateSupplierRe
 {
     public CreateSupplierRequestValidator()
     {
-        RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.CompanyName).NotEmpty().MaximumLength(200);
         RuleFor(x => x.ContactName).NotEmpty().MaximumLength(150);
         RuleFor(x => x.Phone).NotEmpty().MaximumLength(50);

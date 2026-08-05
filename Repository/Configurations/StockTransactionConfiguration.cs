@@ -14,6 +14,7 @@ public class StockTransactionConfiguration : IEntityTypeConfiguration<StockTrans
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id");
+        builder.Property(x => x.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(x => x.ProductId).HasColumnName("product_id").IsRequired();
         builder.Property(x => x.WarehouseId).HasColumnName("warehouse_id").IsRequired();
         builder.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
@@ -25,6 +26,13 @@ public class StockTransactionConfiguration : IEntityTypeConfiguration<StockTrans
         builder.Property(x => x.ReferenceNo).HasColumnName("reference_no").HasMaxLength(100);
         builder.Property(x => x.Notes).HasColumnName("notes").HasColumnType("nvarchar(max)");
         builder.Property(x => x.TransactionDate).HasColumnName("transaction_date").IsRequired();
+
+        builder.HasIndex(x => x.CompanyId);
+
+        builder.HasOne(x => x.Company)
+            .WithMany(x => x.StockTransactions)
+            .HasForeignKey(x => x.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.Product)
             .WithMany(x => x.StockTransactions)

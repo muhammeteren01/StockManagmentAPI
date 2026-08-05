@@ -7,12 +7,13 @@ namespace Core.Mappings;
 /// <summary>StockTransfer entity ↔ DTO dönüşümleri.</summary>
 public static class StockTransferMapper
 {
-    public static StockTransfer ToEntity(CreateStockTransferRequest request) => new()
+    public static StockTransfer ToEntity(CreateStockTransferRequest request, Guid companyId, Guid userId) => new()
     {
         Id = Guid.NewGuid(),
+        CompanyId = companyId,
         FromWarehouseId = request.FromWarehouseId,
         ToWarehouseId = request.ToWarehouseId,
-        UserId = request.UserId,
+        UserId = userId,
         ReferenceNo = request.ReferenceNo,
         Notes = request.Notes,
         Status = StockTransferStatus.Pending,
@@ -28,6 +29,7 @@ public static class StockTransferMapper
     public static StockTransferResponse ToResponse(StockTransfer entity) => new()
     {
         Id = entity.Id,
+        CompanyId = entity.CompanyId,
         FromWarehouseId = entity.FromWarehouseId,
         ToWarehouseId = entity.ToWarehouseId,
         UserId = entity.UserId,

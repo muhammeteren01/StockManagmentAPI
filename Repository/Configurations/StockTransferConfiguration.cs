@@ -14,6 +14,7 @@ public class StockTransferConfiguration : IEntityTypeConfiguration<StockTransfer
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id");
+        builder.Property(x => x.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(x => x.FromWarehouseId).HasColumnName("from_warehouse_id").IsRequired();
         builder.Property(x => x.ToWarehouseId).HasColumnName("to_warehouse_id").IsRequired();
         builder.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
@@ -24,6 +25,12 @@ public class StockTransferConfiguration : IEntityTypeConfiguration<StockTransfer
         builder.Property(x => x.Notes).HasColumnName("notes").HasColumnType("nvarchar(max)");
 
         builder.HasIndex(x => x.ReferenceNo).IsUnique();
+        builder.HasIndex(x => x.CompanyId);
+
+        builder.HasOne(x => x.Company)
+            .WithMany(x => x.StockTransfers)
+            .HasForeignKey(x => x.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.FromWarehouse)
             .WithMany(x => x.OutgoingTransfers)

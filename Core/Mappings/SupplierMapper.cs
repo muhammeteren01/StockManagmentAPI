@@ -6,10 +6,10 @@ namespace Core.Mappings;
 /// <summary>Supplier entity ↔ DTO dönüşümleri.</summary>
 public static class SupplierMapper
 {
-    public static Supplier ToEntity(CreateSupplierRequest request) => new()
+    public static Supplier ToEntity(CreateSupplierRequest request, Guid companyId) => new()
     {
         Id = Guid.NewGuid(),
-        CompanyId = request.CompanyId,
+        CompanyId = companyId,
         CompanyName = request.CompanyName,
         ContactName = request.ContactName,
         Phone = request.Phone,

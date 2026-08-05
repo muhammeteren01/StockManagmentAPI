@@ -8,7 +8,6 @@ public class CreateCategoryRequestValidator : AbstractValidator<CreateCategoryRe
 {
     public CreateCategoryRequestValidator()
     {
-        RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(150);
     }
 }

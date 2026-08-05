@@ -1,5 +1,4 @@
 using Core.DTOs.Users;
-using Core.Enums;
 using FluentValidation;
 
 namespace Core.Validations.Users;
@@ -14,9 +13,7 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
         RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(255);
         RuleFor(x => x.Password).NotEmpty().MinimumLength(6);
         RuleFor(x => x.Role).IsInEnum();
-        RuleFor(x => x.CompanyId).NotEmpty()
-            .When(x => x.Role != UserRole.SuperAdmin)
-            .WithMessage("SuperAdmin dışındaki kullanıcılar için şirket zorunludur.");
+        // CompanyId: SuperAdmin request'ten; CompanyAdmin token'dan (TenantGuard) — validator zorunlu tutmaz.
     }
 }
 
@@ -29,8 +26,5 @@ public class UpdateUserRequestValidator : AbstractValidator<UpdateUserRequest>
         RuleFor(x => x.LastName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(255);
         RuleFor(x => x.Role).IsInEnum();
-        RuleFor(x => x.CompanyId).NotEmpty()
-            .When(x => x.Role != UserRole.SuperAdmin)
-            .WithMessage("SuperAdmin dışındaki kullanıcılar için şirket zorunludur.");
     }
 }

@@ -6,10 +6,10 @@ namespace Core.Mappings;
 /// <summary>Product entity ↔ DTO dönüşümleri.</summary>
 public static class ProductMapper
 {
-    public static Product ToEntity(CreateProductRequest request) => new()
+    public static Product ToEntity(CreateProductRequest request, Guid companyId) => new()
     {
         Id = Guid.NewGuid(),
-        CompanyId = request.CompanyId,
+        CompanyId = companyId,
         CategoryId = request.CategoryId,
         SupplierId = request.SupplierId,
         Sku = request.Sku,

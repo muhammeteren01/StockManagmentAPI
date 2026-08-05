@@ -19,10 +19,8 @@ public class CreatePurchaseOrderRequestValidator : AbstractValidator<CreatePurch
 {
     public CreatePurchaseOrderRequestValidator()
     {
-        RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.SupplierId).NotEmpty();
         RuleFor(x => x.WarehouseId).NotEmpty();
-        RuleFor(x => x.UserId).NotEmpty();
         RuleFor(x => x.OrderNumber).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Items).NotEmpty();
         RuleForEach(x => x.Items).SetValidator(new CreatePurchaseOrderItemRequestValidator());

@@ -8,7 +8,6 @@ public class CreateProductRequestValidator : AbstractValidator<CreateProductRequ
 {
     public CreateProductRequestValidator()
     {
-        RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.CategoryId).NotEmpty();
         RuleFor(x => x.SupplierId).NotEmpty();
         RuleFor(x => x.Sku).NotEmpty().MaximumLength(100);
