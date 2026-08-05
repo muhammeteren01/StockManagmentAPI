@@ -6,12 +6,13 @@ namespace Core.Mappings;
 /// <summary>StockTransaction entity ↔ DTO dönüşümleri.</summary>
 public static class StockTransactionMapper
 {
-    public static StockTransaction ToEntity(CreateStockTransactionRequest request) => new()
+    public static StockTransaction ToEntity(CreateStockTransactionRequest request, Guid companyId, Guid userId) => new()
     {
         Id = Guid.NewGuid(),
+        CompanyId = companyId,
         ProductId = request.ProductId,
         WarehouseId = request.WarehouseId,
-        UserId = request.UserId,
+        UserId = userId,
         TransferId = request.TransferId,
         PurchaseOrderId = request.PurchaseOrderId,
         TransactionType = request.TransactionType,
@@ -25,6 +26,7 @@ public static class StockTransactionMapper
     public static StockTransactionResponse ToResponse(StockTransaction entity) => new()
     {
         Id = entity.Id,
+        CompanyId = entity.CompanyId,
         ProductId = entity.ProductId,
         WarehouseId = entity.WarehouseId,
         UserId = entity.UserId,

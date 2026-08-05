@@ -14,12 +14,19 @@ public class InventoryConfiguration : IEntityTypeConfiguration<Inventory>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id");
+        builder.Property(x => x.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(x => x.ProductId).HasColumnName("product_id").IsRequired();
         builder.Property(x => x.WarehouseId).HasColumnName("warehouse_id").IsRequired();
         builder.Property(x => x.Quantity).HasColumnName("quantity").IsRequired();
         builder.Property(x => x.LastUpdated).HasColumnName("last_updated").IsRequired();
 
         builder.HasIndex(x => new { x.ProductId, x.WarehouseId }).IsUnique();
+        builder.HasIndex(x => x.CompanyId);
+
+        builder.HasOne(x => x.Company)
+            .WithMany(x => x.Inventories)
+            .HasForeignKey(x => x.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.Product)
             .WithMany(x => x.Inventories)

@@ -14,6 +14,7 @@ public class StockTransferItemResponse
 public class StockTransferResponse
 {
     public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
     public Guid FromWarehouseId { get; set; }
     public Guid ToWarehouseId { get; set; }
     public Guid UserId { get; set; }

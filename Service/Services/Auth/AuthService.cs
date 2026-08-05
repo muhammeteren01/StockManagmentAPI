@@ -1,6 +1,7 @@
+using Core.Abstractions;
+using Core.Authorization;
 using Core.DTOs.Auth;
 using Core.Entities;
-using Core.Enums;
 using Core.Exceptions;
 using Core.Repositories;
 using Core.Services;
@@ -17,6 +18,7 @@ public class AuthService : IAuthService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordService _passwordService;
     private readonly ITokenService _tokenService;
+    private readonly ICurrentUser _currentUser;
     private readonly IValidator<RegisterRequest> _registerValidator;
     private readonly IValidator<LoginRequest> _loginValidator;
 
@@ -25,6 +27,7 @@ public class AuthService : IAuthService
         IUnitOfWork unitOfWork,
         IPasswordService passwordService,
         ITokenService tokenService,
+        ICurrentUser currentUser,
         IValidator<RegisterRequest> registerValidator,
         IValidator<LoginRequest> loginValidator)
     {
@@ -32,6 +35,7 @@ public class AuthService : IAuthService
         _unitOfWork = unitOfWork;
         _passwordService = passwordService;
         _tokenService = tokenService;
+        _currentUser = currentUser;
         _registerValidator = registerValidator;
         _loginValidator = loginValidator;
     }
@@ -43,6 +47,8 @@ public class AuthService : IAuthService
         if (!validationResult.IsValid)
             throw new ValidationException(validationResult.Errors);
 
+        var companyId = TenantGuard.ResolveUserCompanyId(_currentUser, request.Role, request.CompanyId);
+
         var existing = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
         if (existing is not null)
             throw new ConflictException("Bu e-posta zaten kayıtlı.");
@@ -50,7 +56,7 @@ public class AuthService : IAuthService
         var user = new User
         {
             Id = Guid.NewGuid(),
-            CompanyId = request.Role == UserRole.SuperAdmin ? null : request.CompanyId,
+            CompanyId = companyId,
             FirstName = request.FirstName,
             LastName = request.LastName,
             Email = request.Email,

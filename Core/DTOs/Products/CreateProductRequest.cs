@@ -2,10 +2,10 @@ using Core.Enums;
 
 namespace Core.DTOs.Products;
 
-/// <summary>Yeni ürün oluşturma isteği.</summary>
+/// <summary>Yeni ürün oluşturma isteği. CompanyId yalnızca SuperAdmin için gerekir.</summary>
 public class CreateProductRequest
 {
-    public Guid CompanyId { get; set; }
+    public Guid? CompanyId { get; set; }
     public Guid CategoryId { get; set; }
     public Guid SupplierId { get; set; }
     public string Sku { get; set; } = string.Empty;

@@ -8,7 +8,6 @@ public class CreateWarehouseRequestValidator : AbstractValidator<CreateWarehouse
 {
     public CreateWarehouseRequestValidator()
     {
-        RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(150);
         RuleFor(x => x.Location).NotEmpty().MaximumLength(255);
         RuleFor(x => x.Capacity).GreaterThan(0).When(x => x.Capacity.HasValue);

@@ -6,10 +6,10 @@ namespace Core.Mappings;
 /// <summary>Category entity ↔ DTO dönüşümleri.</summary>
 public static class CategoryMapper
 {
-    public static Category ToEntity(CreateCategoryRequest request) => new()
+    public static Category ToEntity(CreateCategoryRequest request, Guid companyId) => new()
     {
         Id = Guid.NewGuid(),
-        CompanyId = request.CompanyId,
+        CompanyId = companyId,
         Name = request.Name,
         Description = request.Description
     };

@@ -21,7 +21,6 @@ public class CreateStockTransferRequestValidator : AbstractValidator<CreateStock
         RuleFor(x => x.FromWarehouseId).NotEmpty();
         RuleFor(x => x.ToWarehouseId).NotEmpty()
             .NotEqual(x => x.FromWarehouseId).WithMessage("Kaynak ve hedef depo aynı olamaz.");
-        RuleFor(x => x.UserId).NotEmpty();
         RuleFor(x => x.ReferenceNo).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Items).NotEmpty();
         RuleForEach(x => x.Items).SetValidator(new CreateStockTransferItemRequestValidator());

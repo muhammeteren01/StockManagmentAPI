@@ -1,6 +1,8 @@
 using API;
+using API.Services;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using Core.Abstractions;
 using Core.Validations.Users;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +20,8 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
 });
 
 builder.Services.AddControllers();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddSwaggerDocumentation();
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddValidatorsFromAssemblyContaining<UserValidator>();

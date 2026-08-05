@@ -6,10 +6,10 @@ namespace Core.Mappings;
 /// <summary>Warehouse entity ↔ DTO dönüşümleri.</summary>
 public static class WarehouseMapper
 {
-    public static Warehouse ToEntity(CreateWarehouseRequest request) => new()
+    public static Warehouse ToEntity(CreateWarehouseRequest request, Guid companyId) => new()
     {
         Id = Guid.NewGuid(),
-        CompanyId = request.CompanyId,
+        CompanyId = companyId,
         Name = request.Name,
         Location = request.Location,
         Capacity = request.Capacity,

@@ -28,8 +28,6 @@ public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
         RuleFor(x => x.Role)
             .IsInEnum().WithMessage("Geçersiz kullanıcı rolü.");
 
-        RuleFor(x => x.CompanyId)
-            .NotEmpty().WithMessage("SuperAdmin dışındaki kullanıcılar için şirket zorunludur.")
-            .When(x => x.Role != Enums.UserRole.SuperAdmin);
+        // CompanyId: SuperAdmin request'ten; CompanyAdmin token'dan (TenantGuard).
     }
 }

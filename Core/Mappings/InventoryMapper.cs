@@ -9,6 +9,7 @@ public static class InventoryMapper
     public static InventoryResponse ToResponse(Inventory entity) => new()
     {
         Id = entity.Id,
+        CompanyId = entity.CompanyId,
         ProductId = entity.ProductId,
         WarehouseId = entity.WarehouseId,
         Quantity = entity.Quantity,

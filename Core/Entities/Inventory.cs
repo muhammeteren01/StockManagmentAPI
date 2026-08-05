@@ -7,6 +7,7 @@ namespace Core.Entities;
 public class Inventory
 {
     public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
     public Guid ProductId { get; set; }
     public Guid WarehouseId { get; set; }
 
@@ -15,6 +16,7 @@ public class Inventory
 
     public DateTime LastUpdated { get; set; }
 
+    public Company Company { get; set; } = null!;
     public Product Product { get; set; } = null!;
     public Warehouse Warehouse { get; set; } = null!;
 }

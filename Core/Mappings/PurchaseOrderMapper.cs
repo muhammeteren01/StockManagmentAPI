@@ -7,13 +7,13 @@ namespace Core.Mappings;
 /// <summary>PurchaseOrder entity ↔ DTO dönüşümleri.</summary>
 public static class PurchaseOrderMapper
 {
-    public static PurchaseOrder ToEntity(CreatePurchaseOrderRequest request) => new()
+    public static PurchaseOrder ToEntity(CreatePurchaseOrderRequest request, Guid companyId, Guid userId) => new()
     {
         Id = Guid.NewGuid(),
-        CompanyId = request.CompanyId,
+        CompanyId = companyId,
         SupplierId = request.SupplierId,
         WarehouseId = request.WarehouseId,
-        UserId = request.UserId,
+        UserId = userId,
         OrderNumber = request.OrderNumber,
         ExpectedDeliveryDate = request.ExpectedDeliveryDate,
         Status = PurchaseOrderStatus.Pending,
