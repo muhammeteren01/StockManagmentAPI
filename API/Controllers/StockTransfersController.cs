@@ -1,3 +1,4 @@
+using Core.Authorization;
 using Core.DTOs.StockTransfers;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -18,11 +19,13 @@ public class StockTransfersController : ControllerBase
 
     /// <summary>Tüm transferleri listeler.</summary>
     [HttpGet]
+    [Authorize(Roles = AppRoles.All)]
     public async Task<ActionResult<IReadOnlyList<StockTransferResponse>>> GetAll(CancellationToken cancellationToken)
         => Ok(await _stockTransferService.GetAllAsync(cancellationToken));
 
     /// <summary>Id ile transfer getirir.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = AppRoles.All)]
     public async Task<ActionResult<StockTransferResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var transfer = await _stockTransferService.GetByIdAsync(id, cancellationToken);
@@ -31,6 +34,7 @@ public class StockTransfersController : ControllerBase
 
     /// <summary>Yeni transfer oluşturur (Pending).</summary>
     [HttpPost]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<ActionResult<StockTransferResponse>> Create([FromBody] CreateStockTransferRequest request, CancellationToken cancellationToken)
     {
         var created = await _stockTransferService.CreateAsync(request, cancellationToken);
@@ -39,6 +43,7 @@ public class StockTransfersController : ControllerBase
 
     /// <summary>Transferi başlatır (InTransit).</summary>
     [HttpPost("{id:guid}/start")]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<IActionResult> Start(Guid id, CancellationToken cancellationToken)
     {
         await _stockTransferService.StartAsync(id, cancellationToken);
@@ -47,6 +52,7 @@ public class StockTransfersController : ControllerBase
 
     /// <summary>Transferi tamamlar (Completed).</summary>
     [HttpPost("{id:guid}/complete")]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<IActionResult> Complete(Guid id, CancellationToken cancellationToken)
     {
         await _stockTransferService.CompleteAsync(id, cancellationToken);
@@ -55,6 +61,7 @@ public class StockTransfersController : ControllerBase
 
     /// <summary>Transferi iptal eder.</summary>
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)
     {
         await _stockTransferService.CancelAsync(id, cancellationToken);

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Core.Authorization;
 using Core.DTOs.Auth;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -18,9 +19,9 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    /// <summary>Yeni kullanıcı kaydı; JWT döner.</summary>
+    /// <summary>Yeni kullanıcı kaydı; JWT döner. Yalnızca SuperAdmin / CompanyAdmin.</summary>
     [HttpPost("register")]
-    [AllowAnonymous]
+    [Authorize(Roles = AppRoles.CompanyAdmins)]
     public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.RegisterAsync(request, cancellationToken);

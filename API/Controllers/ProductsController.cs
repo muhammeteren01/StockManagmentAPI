@@ -1,3 +1,4 @@
+using Core.Authorization;
 using Core.DTOs.Products;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -17,11 +18,13 @@ public class ProductsController : ControllerBase
 
     /// <summary>Tüm ürünleri listeler.</summary>
     [HttpGet]
+    [Authorize(Roles = AppRoles.All)]
     public async Task<ActionResult<IReadOnlyList<ProductResponse>>> GetAll(CancellationToken cancellationToken)
         => Ok(await _productService.GetAllAsync(cancellationToken));
 
     /// <summary>Id ile ürün getirir.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = AppRoles.All)]
     public async Task<ActionResult<ProductResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var product = await _productService.GetByIdAsync(id, cancellationToken);
@@ -30,11 +33,13 @@ public class ProductsController : ControllerBase
 
     /// <summary>Şirkete ait ürünleri listeler.</summary>
     [HttpGet("by-company/{companyId:guid}")]
+    [Authorize(Roles = AppRoles.All)]
     public async Task<ActionResult<IReadOnlyList<ProductResponse>>> GetByCompany(Guid companyId, CancellationToken cancellationToken)
         => Ok(await _productService.GetByCompanyIdAsync(companyId, cancellationToken));
 
     /// <summary>Yeni ürün oluşturur.</summary>
     [HttpPost]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<ActionResult<ProductResponse>> Create([FromBody] CreateProductRequest request, CancellationToken cancellationToken)
     {
         var created = await _productService.CreateAsync(request, cancellationToken);
@@ -43,11 +48,13 @@ public class ProductsController : ControllerBase
 
     /// <summary>Ürünü günceller.</summary>
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<ActionResult<ProductResponse>> Update(Guid id, [FromBody] UpdateProductRequest request, CancellationToken cancellationToken)
         => Ok(await _productService.UpdateAsync(id, request, cancellationToken));
 
     /// <summary>Ürünü siler.</summary>
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = AppRoles.Writers)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         await _productService.DeleteAsync(id, cancellationToken);
