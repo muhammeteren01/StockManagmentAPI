@@ -27,7 +27,7 @@ public class AuthControllerRegisterTests
     /// RegisterAsync bir kez çağrılır.
     /// </summary>
     [Fact]
-    public async Task Register_ServiceBasarili_OkVeAuthResponseDoner()
+    public async Task Register_WhenServiceSucceeds_ReturnsOkWithAuthResponse()
     {
         var request = new RegisterRequest
         {
@@ -54,7 +54,7 @@ public class AuthControllerRegisterTests
     /// Register: CompanyId null (SuperAdmin) iken servis başarılıysa Ok döner.
     /// </summary>
     [Fact]
-    public async Task Register_SuperAdmin_CompanyIdNull_OkDoner()
+    public async Task Register_WhenSuperAdmin_CompanyIdNull_ReturnsOk()
     {
         var request = new RegisterRequest
         {
@@ -84,7 +84,7 @@ public class AuthControllerRegisterTests
     [InlineData(UserRole.CompanyAdmin)]
     [InlineData(UserRole.Manager)]
     [InlineData(UserRole.Staff)]
-    public async Task Register_CompanyIdNull_SuperAdminDegil_OkVeCompanyIdNullDoner(UserRole role)
+    public async Task Register_WhenCompanyIdNull_AndNotSuperAdmin_ReturnsOkWithNullCompanyId(UserRole role)
     {
         var request = new RegisterRequest
         {
@@ -113,7 +113,7 @@ public class AuthControllerRegisterTests
     /// Register: yanıtta Role gelmemiş / varsayılan (0). Controller Role doğrulamaz; Ok ile iletir.
     /// </summary>
     [Fact]
-    public async Task Register_RoleGelmemis_VeyaDefault_OkVeRoleDefaultDoner()
+    public async Task Register_WhenRoleMissingOrDefault_ReturnsOkWithDefaultRole()
     {
         var request = new RegisterRequest
         {
@@ -146,7 +146,7 @@ public class AuthControllerRegisterTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task Register_EmailBosVeyaNull_ValidationExceptionFirlatir(string? email)
+    public async Task Register_WhenEmailEmptyOrNull_ThrowsValidationException(string? email)
     {
         var request = new RegisterRequest
         {
@@ -171,7 +171,7 @@ public class AuthControllerRegisterTests
     /// Register: şifre boş → ValidationException iletilir.
     /// </summary>
     [Fact]
-    public async Task Register_SifreBos_ValidationExceptionFirlatir()
+    public async Task Register_WhenPasswordEmpty_ThrowsValidationException()
     {
         var request = new RegisterRequest
         {
@@ -196,7 +196,7 @@ public class AuthControllerRegisterTests
     /// Register: e-posta zaten kayıtlı → ConflictException iletilir (HTTP 409).
     /// </summary>
     [Fact]
-    public async Task Register_EmailZatenKayitli_ConflictExceptionFirlatir()
+    public async Task Register_WhenEmailAlreadyRegistered_ThrowsConflictException()
     {
         var request = new RegisterRequest
         {
