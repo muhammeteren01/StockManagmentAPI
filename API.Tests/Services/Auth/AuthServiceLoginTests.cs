@@ -29,7 +29,7 @@ public class AuthServiceLoginTests
 
     /// <summary>Login: e-posta boş → ValidationException.</summary>
     [Fact]
-    public async Task LoginAsync_EmailBos_ValidationExceptionFirlatir()
+    public async Task LoginAsync_WhenEmailEmpty_ThrowsValidationException()
     {
         var request = AuthServiceTestHelper.ValidLogin(email: "");
 
@@ -44,7 +44,7 @@ public class AuthServiceLoginTests
 
     /// <summary>Login: geçersiz e-posta formatı → ValidationException.</summary>
     [Fact]
-    public async Task LoginAsync_EmailFormatGecersiz_ValidationExceptionFirlatir()
+    public async Task LoginAsync_WhenEmailFormatInvalid_ThrowsValidationException()
     {
         var request = AuthServiceTestHelper.ValidLogin(email: "not-an-email");
 
@@ -58,7 +58,7 @@ public class AuthServiceLoginTests
 
     /// <summary>Login: şifre boş → ValidationException.</summary>
     [Fact]
-    public async Task LoginAsync_SifreBos_ValidationExceptionFirlatir()
+    public async Task LoginAsync_WhenPasswordEmpty_ThrowsValidationException()
     {
         var request = AuthServiceTestHelper.ValidLogin(password: "");
 
@@ -70,7 +70,7 @@ public class AuthServiceLoginTests
 
     /// <summary>Login: kullanıcı bulunamadı → UnauthorizedException.</summary>
     [Fact]
-    public async Task LoginAsync_KullaniciYok_UnauthorizedExceptionFirlatir()
+    public async Task LoginAsync_WhenUserNotFound_ThrowsUnauthorizedException()
     {
         var request = AuthServiceTestHelper.ValidLogin();
         _userRepository
@@ -88,7 +88,7 @@ public class AuthServiceLoginTests
 
     /// <summary>Login: yanlış şifre → UnauthorizedException.</summary>
     [Fact]
-    public async Task LoginAsync_YanlisSifre_UnauthorizedExceptionFirlatir()
+    public async Task LoginAsync_WhenPasswordWrong_ThrowsUnauthorizedException()
     {
         var request = AuthServiceTestHelper.ValidLogin();
         var user = AuthServiceTestHelper.CreateUser(email: request.Email);
@@ -107,7 +107,7 @@ public class AuthServiceLoginTests
 
     /// <summary>Login: pasif kullanıcı → UnauthorizedException.</summary>
     [Fact]
-    public async Task LoginAsync_PasifKullanici_UnauthorizedExceptionFirlatir()
+    public async Task LoginAsync_WhenUserInactive_ThrowsUnauthorizedException()
     {
         var request = AuthServiceTestHelper.ValidLogin();
         var user = AuthServiceTestHelper.CreateUser(email: request.Email, isActive: false);
@@ -129,7 +129,7 @@ public class AuthServiceLoginTests
 
     /// <summary>Login: geçerli kimlik → AuthResponse (token alanları dolu).</summary>
     [Fact]
-    public async Task LoginAsync_Basarili_AuthResponseDoner()
+    public async Task LoginAsync_WhenSuccessful_ReturnsAuthResponse()
     {
         var request = AuthServiceTestHelper.ValidLogin();
         var user = AuthServiceTestHelper.CreateUser(email: request.Email);

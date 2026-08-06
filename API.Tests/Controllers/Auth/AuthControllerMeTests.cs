@@ -20,7 +20,7 @@ public class AuthControllerMeTests
     /// Me: tüm claim'ler (id, email, name, role, company_id) doluysa Ok gövdesinde hepsi görünür.
     /// </summary>
     [Fact]
-    public void Me_TumClaimlerDolu_OkAnonimObjeDoner()
+    public void Me_WhenAllClaimsPresent_ReturnsOkWithAnonymousObject()
     {
         var userId = Guid.NewGuid();
         var companyId = Guid.NewGuid();
@@ -48,7 +48,7 @@ public class AuthControllerMeTests
     /// Me: company_id claim yok (SuperAdmin token senaryosu) → companyId null, diğer alanlar dolu.
     /// </summary>
     [Fact]
-    public void Me_CompanyIdClaimYok_CompanyIdNullDoner()
+    public void Me_WhenCompanyIdClaimMissing_ReturnsNullCompanyId()
     {
         var userId = Guid.NewGuid();
         AuthTestHelper.SetUser(_sut,
@@ -74,7 +74,7 @@ public class AuthControllerMeTests
     /// Me: email claim yok → email null, diğer mevcut claim'ler dolu kalır.
     /// </summary>
     [Fact]
-    public void Me_EmailClaimYok_EmailNullDoner()
+    public void Me_WhenEmailClaimMissing_ReturnsNullEmail()
     {
         var userId = Guid.NewGuid();
         var companyId = Guid.NewGuid();
@@ -101,7 +101,7 @@ public class AuthControllerMeTests
     /// Me: NameIdentifier (id) claim yok → id null.
     /// </summary>
     [Fact]
-    public void Me_UserIdClaimYok_IdNullDoner()
+    public void Me_WhenUserIdClaimMissing_ReturnsNullId()
     {
         AuthTestHelper.SetUser(_sut,
             new Claim(ClaimTypes.Email, "ali@test.com"),
@@ -124,7 +124,7 @@ public class AuthControllerMeTests
     /// Me: role claim yok → role null.
     /// </summary>
     [Fact]
-    public void Me_RoleClaimYok_RoleNullDoner()
+    public void Me_WhenRoleClaimMissing_ReturnsNullRole()
     {
         var userId = Guid.NewGuid();
         AuthTestHelper.SetUser(_sut,
@@ -148,7 +148,7 @@ public class AuthControllerMeTests
     /// Me: hiç claim yok → tüm alanlar null Ok gövdesi.
     /// </summary>
     [Fact]
-    public void Me_HicClaimYok_TumAlanlarNullOkDoner()
+    public void Me_WhenNoClaims_ReturnsOkWithAllFieldsNull()
     {
         AuthTestHelper.SetUser(_sut);
 

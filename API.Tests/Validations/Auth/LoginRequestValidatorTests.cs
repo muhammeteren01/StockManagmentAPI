@@ -11,7 +11,7 @@ public class LoginRequestValidatorTests
 
     /// <summary>Geçerli e-posta ve şifre → doğrulama başarılı.</summary>
     [Fact]
-    public void Validate_GecerliIstek_Basarili()
+    public void Validate_WhenRequestValid_Succeeds()
     {
         var request = new LoginRequest { Email = "ali@test.com", Password = "Secret1!" };
 
@@ -26,7 +26,7 @@ public class LoginRequestValidatorTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Validate_EmailBos_HataDoner(string? email)
+    public void Validate_WhenEmailEmpty_ReturnsError(string? email)
     {
         var request = new LoginRequest { Email = email!, Password = "Secret1!" };
 
@@ -43,7 +43,7 @@ public class LoginRequestValidatorTests
     [InlineData("not-an-email")]
     [InlineData("ali@")]
     [InlineData("@test.com")]
-    public void Validate_EmailFormatGecersiz_HataDoner(string email)
+    public void Validate_WhenEmailFormatInvalid_ReturnsError(string email)
     {
         var request = new LoginRequest { Email = email, Password = "Secret1!" };
 
@@ -59,7 +59,7 @@ public class LoginRequestValidatorTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    public void Validate_SifreBos_HataDoner(string? password)
+    public void Validate_WhenPasswordEmpty_ReturnsError(string? password)
     {
         var request = new LoginRequest { Email = "ali@test.com", Password = password! };
 
@@ -73,7 +73,7 @@ public class LoginRequestValidatorTests
 
     /// <summary>Kısa şifre Login validator'da geçerli (yalnızca NotEmpty).</summary>
     [Fact]
-    public void Validate_SifreKisa_LoginKurallarindaGecerli()
+    public void Validate_WhenPasswordShort_IsValidUnderLoginRules()
     {
         var request = new LoginRequest { Email = "ali@test.com", Password = "123" };
 

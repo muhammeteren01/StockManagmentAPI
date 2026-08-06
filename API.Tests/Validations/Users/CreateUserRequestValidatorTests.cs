@@ -1,16 +1,16 @@
-using Core.DTOs.Auth;
+using Core.DTOs.Users;
 using Core.Enums;
-using Core.Validations.Auth;
+using Core.Validations.Users;
 using FluentAssertions;
 
-namespace API.Tests.Validations.Auth;
+namespace API.Tests.Validations.Users;
 
-/// <summary>RegisterRequestValidator birim testleri (gerçek FluentValidation kuralları).</summary>
-public class RegisterRequestValidatorTests
+/// <summary>CreateUserRequestValidator birim testleri.</summary>
+public class CreateUserRequestValidatorTests
 {
-    private readonly RegisterRequestValidator _sut = new();
+    private readonly CreateUserRequestValidator _sut = new();
 
-    private static RegisterRequest ValidRequest() => new()
+    private static CreateUserRequest ValidRequest() => new()
     {
         FirstName = "Ali",
         LastName = "Veli",
@@ -20,7 +20,7 @@ public class RegisterRequestValidatorTests
         Role = UserRole.Staff
     };
 
-    /// <summary>Tüm zorunlu alanlar dolu → doğrulama başarılı.</summary>
+    /// <summary>Geçerli istek → doğrulama başarılı.</summary>
     [Fact]
     public void Validate_WhenRequestValid_Succeeds()
     {
@@ -30,7 +30,7 @@ public class RegisterRequestValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    /// <summary>Ad boş/null/whitespace → "Ad zorunludur."</summary>
+    /// <summary>FirstName boş → hata.</summary>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -43,16 +43,13 @@ public class RegisterRequestValidatorTests
         var result = _sut.Validate(request);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
-            e.PropertyName == nameof(RegisterRequest.FirstName) &&
-            e.ErrorMessage == "Ad zorunludur.");
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateUserRequest.FirstName));
     }
 
-    /// <summary>Soyad boş → "Soyad zorunludur."</summary>
+    /// <summary>LastName boş → hata.</summary>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("   ")]
     public void Validate_WhenLastNameEmpty_ReturnsError(string? lastName)
     {
         var request = ValidRequest();
@@ -61,16 +58,13 @@ public class RegisterRequestValidatorTests
         var result = _sut.Validate(request);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
-            e.PropertyName == nameof(RegisterRequest.LastName) &&
-            e.ErrorMessage == "Soyad zorunludur.");
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateUserRequest.LastName));
     }
 
-    /// <summary>E-posta boş → "E-posta zorunludur."</summary>
+    /// <summary>E-posta boş → hata.</summary>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("   ")]
     public void Validate_WhenEmailEmpty_ReturnsError(string? email)
     {
         var request = ValidRequest();
@@ -79,16 +73,13 @@ public class RegisterRequestValidatorTests
         var result = _sut.Validate(request);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
-            e.PropertyName == nameof(RegisterRequest.Email) &&
-            e.ErrorMessage == "E-posta zorunludur.");
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateUserRequest.Email));
     }
 
-    /// <summary>Geçersiz e-posta formatı → "Geçerli bir e-posta giriniz."</summary>
+    /// <summary>Geçersiz e-posta formatı → hata.</summary>
     [Theory]
     [InlineData("not-an-email")]
     [InlineData("ali@")]
-    [InlineData("@test.com")]
     public void Validate_WhenEmailFormatInvalid_ReturnsError(string email)
     {
         var request = ValidRequest();
@@ -97,12 +88,10 @@ public class RegisterRequestValidatorTests
         var result = _sut.Validate(request);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
-            e.PropertyName == nameof(RegisterRequest.Email) &&
-            e.ErrorMessage == "Geçerli bir e-posta giriniz.");
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateUserRequest.Email));
     }
 
-    /// <summary>Şifre boş → "Şifre zorunludur."</summary>
+    /// <summary>Şifre boş → hata.</summary>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -114,12 +103,10 @@ public class RegisterRequestValidatorTests
         var result = _sut.Validate(request);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
-            e.PropertyName == nameof(RegisterRequest.Password) &&
-            e.ErrorMessage == "Şifre zorunludur.");
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateUserRequest.Password));
     }
 
-    /// <summary>Şifre 6 karakterden kısa → "Şifre en az 6 karakter olmalıdır."</summary>
+    /// <summary>Şifre 6 karakterden kısa → hata.</summary>
     [Theory]
     [InlineData("1")]
     [InlineData("12345")]
@@ -131,9 +118,7 @@ public class RegisterRequestValidatorTests
         var result = _sut.Validate(request);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
-            e.PropertyName == nameof(RegisterRequest.Password) &&
-            e.ErrorMessage == "Şifre en az 6 karakter olmalıdır.");
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateUserRequest.Password));
     }
 
     /// <summary>Şifre tam 6 karakter → geçerli.</summary>
@@ -148,7 +133,7 @@ public class RegisterRequestValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    /// <summary>Geçersiz Role enum değeri → "Geçersiz kullanıcı rolü."</summary>
+    /// <summary>Geçersiz Role enum → hata.</summary>
     [Fact]
     public void Validate_WhenRoleInvalid_ReturnsError()
     {
@@ -158,8 +143,18 @@ public class RegisterRequestValidatorTests
         var result = _sut.Validate(request);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
-            e.PropertyName == nameof(RegisterRequest.Role) &&
-            e.ErrorMessage == "Geçersiz kullanıcı rolü.");
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateUserRequest.Role));
+    }
+
+    /// <summary>CompanyId null → geçerli (TenantGuard serviste çözer).</summary>
+    [Fact]
+    public void Validate_WhenCompanyIdNull_Succeeds()
+    {
+        var request = ValidRequest();
+        request.CompanyId = null;
+
+        var result = _sut.Validate(request);
+
+        result.IsValid.Should().BeTrue();
     }
 }

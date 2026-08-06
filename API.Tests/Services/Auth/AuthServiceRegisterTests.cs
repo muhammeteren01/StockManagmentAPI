@@ -30,7 +30,7 @@ public class AuthServiceRegisterTests
 
     /// <summary>Register: e-posta boş → ValidationException; repository çağrılmaz.</summary>
     [Fact]
-    public async Task RegisterAsync_EmailBos_ValidationExceptionFirlatir()
+    public async Task RegisterAsync_WhenEmailEmpty_ThrowsValidationException()
     {
         var request = AuthServiceTestHelper.ValidRegister(email: "");
 
@@ -45,7 +45,7 @@ public class AuthServiceRegisterTests
 
     /// <summary>Register: ad boş → ValidationException.</summary>
     [Fact]
-    public async Task RegisterAsync_FirstNameBos_ValidationExceptionFirlatir()
+    public async Task RegisterAsync_WhenFirstNameEmpty_ThrowsValidationException()
     {
         var request = AuthServiceTestHelper.ValidRegister();
         request.FirstName = "";
@@ -58,7 +58,7 @@ public class AuthServiceRegisterTests
 
     /// <summary>Register: kısa şifre → ValidationException.</summary>
     [Fact]
-    public async Task RegisterAsync_SifreKisa_ValidationExceptionFirlatir()
+    public async Task RegisterAsync_WhenPasswordShort_ThrowsValidationException()
     {
         var request = AuthServiceTestHelper.ValidRegister();
         request.Password = "12345";
@@ -71,7 +71,7 @@ public class AuthServiceRegisterTests
 
     /// <summary>Register: e-posta zaten kayıtlı → ConflictException.</summary>
     [Fact]
-    public async Task RegisterAsync_EmailZatenKayitli_ConflictExceptionFirlatir()
+    public async Task RegisterAsync_WhenEmailAlreadyRegistered_ThrowsConflictException()
     {
         var companyId = Guid.NewGuid();
         AuthServiceTestHelper.SetupCompanyAdminCurrentUser(_currentUser, companyId);
@@ -94,7 +94,7 @@ public class AuthServiceRegisterTests
     /// Register: CompanyAdmin çağıranı — CompanyId token'dan; hash + AddAsync + SaveChanges + AuthResponse.
     /// </summary>
     [Fact]
-    public async Task RegisterAsync_Basarili_HashAddSaveVeAuthResponseDoner()
+    public async Task RegisterAsync_WhenSuccessful_HashesAddsSavesAndReturnsAuthResponse()
     {
         var companyId = Guid.NewGuid();
         AuthServiceTestHelper.SetupCompanyAdminCurrentUser(_currentUser, companyId);
@@ -140,7 +140,7 @@ public class AuthServiceRegisterTests
 
     /// <summary>Register: SuperAdmin, SuperAdmin rolü → CompanyId null.</summary>
     [Fact]
-    public async Task RegisterAsync_SuperAdminRol_CompanyIdNull()
+    public async Task RegisterAsync_WhenSuperAdminRole_CompanyIdIsNull()
     {
         AuthServiceTestHelper.SetupSuperAdminCurrentUser(_currentUser);
         var request = AuthServiceTestHelper.ValidRegister(role: UserRole.SuperAdmin, companyId: null);
@@ -168,7 +168,7 @@ public class AuthServiceRegisterTests
     /// Register: CompanyAdmin SuperAdmin rolü atayamaz → ForbiddenException (TenantGuard).
     /// </summary>
     [Fact]
-    public async Task RegisterAsync_CompanyAdminSuperAdminAtayamaz_ForbiddenException()
+    public async Task RegisterAsync_WhenCompanyAdminAssignsSuperAdmin_ThrowsForbiddenException()
     {
         AuthServiceTestHelper.SetupCompanyAdminCurrentUser(_currentUser, Guid.NewGuid());
         var request = AuthServiceTestHelper.ValidRegister(role: UserRole.SuperAdmin);

@@ -27,7 +27,7 @@ public class AuthControllerLoginTests
     /// LoginAsync bir kez çağrılır.
     /// </summary>
     [Fact]
-    public async Task Login_ServiceBasarili_OkVeAuthResponseDoner()
+    public async Task Login_WhenServiceSucceeds_ReturnsOkWithAuthResponse()
     {
         var request = new LoginRequest { Email = "ali@test.com", Password = "Secret1!" };
         var expected = AuthTestHelper.CreateAuthResponse(request.Email, UserRole.CompanyAdmin, Guid.NewGuid());
@@ -46,7 +46,7 @@ public class AuthControllerLoginTests
     /// Login: CompanyId null olan SuperAdmin yanıtı Ok döner (beklenen senaryo).
     /// </summary>
     [Fact]
-    public async Task Login_SuperAdmin_CompanyIdNull_OkDoner()
+    public async Task Login_WhenSuperAdmin_CompanyIdNull_ReturnsOk()
     {
         var request = new LoginRequest { Email = "root@test.com", Password = "Secret1!" };
         var expected = AuthTestHelper.CreateAuthResponse(request.Email, UserRole.SuperAdmin, companyId: null);
@@ -69,7 +69,7 @@ public class AuthControllerLoginTests
     [InlineData(UserRole.CompanyAdmin)]
     [InlineData(UserRole.Manager)]
     [InlineData(UserRole.Staff)]
-    public async Task Login_CompanyIdNull_SuperAdminDegil_OkVeCompanyIdNullDoner(UserRole role)
+    public async Task Login_WhenCompanyIdNull_AndNotSuperAdmin_ReturnsOkWithNullCompanyId(UserRole role)
     {
         var request = new LoginRequest { Email = $"{role}@test.com", Password = "Secret1!" };
         var expected = AuthTestHelper.CreateAuthResponse(request.Email, role, companyId: null);
@@ -90,7 +90,7 @@ public class AuthControllerLoginTests
     /// Login: yanıtta Role gelmemiş / varsayılan (0). Controller Role doğrulamaz; Ok ile iletir.
     /// </summary>
     [Fact]
-    public async Task Login_RoleGelmemis_VeyaDefault_OkVeRoleDefaultDoner()
+    public async Task Login_WhenRoleMissingOrDefault_ReturnsOkWithDefaultRole()
     {
         var request = new LoginRequest { Email = "norole@test.com", Password = "Secret1!" };
         var expected = AuthTestHelper.CreateAuthResponse(request.Email, role: default, companyId: Guid.NewGuid());
@@ -115,7 +115,7 @@ public class AuthControllerLoginTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task Login_EmailBosVeyaNull_ValidationExceptionFirlatir(string? email)
+    public async Task Login_WhenEmailEmptyOrNull_ThrowsValidationException(string? email)
     {
         var request = new LoginRequest { Email = email!, Password = "Secret1!" };
         _authService
@@ -134,7 +134,7 @@ public class AuthControllerLoginTests
     /// Login: şifre boş → ValidationException iletilir.
     /// </summary>
     [Fact]
-    public async Task Login_SifreBos_ValidationExceptionFirlatir()
+    public async Task Login_WhenPasswordEmpty_ThrowsValidationException()
     {
         var request = new LoginRequest { Email = "ali@test.com", Password = "" };
         _authService
@@ -153,7 +153,7 @@ public class AuthControllerLoginTests
     /// Login: hatalı e-posta/şifre → UnauthorizedException (HTTP 401).
     /// </summary>
     [Fact]
-    public async Task Login_HataliKimlik_UnauthorizedExceptionFirlatir()
+    public async Task Login_WhenCredentialsInvalid_ThrowsUnauthorizedException()
     {
         var request = new LoginRequest { Email = "ali@test.com", Password = "yanlis" };
         _authService
@@ -170,7 +170,7 @@ public class AuthControllerLoginTests
     /// Login: pasif kullanıcı → UnauthorizedException iletilir.
     /// </summary>
     [Fact]
-    public async Task Login_PasifKullanici_UnauthorizedExceptionFirlatir()
+    public async Task Login_WhenUserInactive_ThrowsUnauthorizedException()
     {
         var request = new LoginRequest { Email = "pasif@test.com", Password = "Secret1!" };
         _authService
