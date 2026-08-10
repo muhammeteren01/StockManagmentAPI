@@ -166,6 +166,38 @@ public class SysmondSyncService : ISysmondSyncService
 
         result.WarehousesFetched = remoteWarehouses.Count;
 
+        Guid companyPeriodId;
+        try
+        {
+            var periods = await _inventoryQuery.GetMyCompanyPeriodsAsync(accessToken, cancellationToken);
+            var period =
+                periods.FirstOrDefault(p => p.CompanyId == company.Id && p.IsActive)
+                ?? periods.FirstOrDefault(p => p.CompanyId == company.Id);
+
+            if (period is null || period.Id == Guid.Empty)
+            {
+                result.Failed++;
+                result.Errors =
+                [
+                    $"CompanyPeriod bulunamadı (CompanyId={company.Id}). my-company-periods boş veya şirket eşleşmedi."
+                ];
+                return result;
+            }
+
+            companyPeriodId = period.Id;
+            _logger.LogInformation(
+                "Sysmond inventory sync CompanyPeriod seçildi: {CompanyPeriodId} ({PeriodName})",
+                companyPeriodId,
+                period.Name);
+        }
+        catch (Exception ex)
+        {
+            result.Failed++;
+            result.Errors = [$"my-company-periods alınamadı: {ex.Message}"];
+            _logger.LogWarning(ex, "Sysmond my-company-periods başarısız: {CompanyId}", sysmondCompanyId);
+            return result;
+        }
+
         // warehouseExternalId → local warehouse (upsert sonrası)
         var warehouseByExternal = new Dictionary<Guid, Warehouse>();
         foreach (var remoteWh in remoteWarehouses)
@@ -245,22 +277,31 @@ public class SysmondSyncService : ISysmondSyncService
         }
 
         var balances = new List<SysmondStockBalanceDto>();
-        foreach (var remoteWhId in warehouseByExternal.Keys)
+        var localProducts = await _productRepository.GetByCompanyIdAsync(company.Id, cancellationToken);
+        var remoteStockIds = localProducts
+            .Where(p => p.ExternalSysmondId is Guid)
+            .Select(p => p.ExternalSysmondId!.Value)
+            .Distinct()
+            .ToList();
+
+        foreach (var stockId in remoteStockIds)
         {
             try
             {
-                var page = await _inventoryQuery.GetStockBalancesByWarehouseAsync(
-                    accessToken, remoteWhId, cancellationToken);
+                // WarehouseId ile değil StockId ile: sandbox'ta depo kırılımı böyle geliyor.
+                var page = await _inventoryQuery.GetStockBalancesByStockAsync(
+                    accessToken, companyPeriodId, stockId, cancellationToken);
                 balances.AddRange(page);
             }
             catch (Exception ex)
             {
                 result.Failed++;
-                errors.Add($"stock/balance WarehouseId={remoteWhId}: {ex.Message}");
+                errors.Add($"stock/balance StockId={stockId}: {ex.Message}");
                 _logger.LogWarning(
                     ex,
-                    "Sysmond stock/balance başarısız: WarehouseId={WarehouseId}",
-                    remoteWhId);
+                    "Sysmond stock/balance başarısız: CompanyPeriodId={CompanyPeriodId}, StockId={StockId}",
+                    companyPeriodId,
+                    stockId);
             }
         }
 

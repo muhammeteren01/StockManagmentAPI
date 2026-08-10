@@ -39,7 +39,8 @@ public class SysmondInventoryQueryService : ISysmondInventoryQueryService
             throw new ArgumentException("companyId zorunludur.", nameof(companyId));
 
         var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
-        var url = $"api/app/warehouse?companyId={companyId}&includeDeactivated=true";
+        // includeDeactivated=true sandbox'ta boş data döndürebiliyor; yalnızca companyId ile çağır.
+        var url = $"api/app/warehouse?companyId={companyId}";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -98,14 +99,82 @@ public class SysmondInventoryQueryService : ISysmondInventoryQueryService
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<SysmondStockBalanceDto>> GetStockBalancesByWarehouseAsync(
+    public async Task<IReadOnlyList<SysmondCompanyPeriodDto>> GetMyCompanyPeriodsAsync(
         string accessToken,
-        Guid warehouseId,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        // isActive query'si bazı ortamlarda listeyi bozabiliyor; hepsini alıp caller filtreler.
+        var url = "api/app/user-profile/my-company-periods";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond my-company-periods başarısız ({(int)response.StatusCode}): {Truncate(body, 500)}");
+        }
+
+        var parsed = JsonSerializer.Deserialize<SysmondCompanyPeriodListResult>(body, JsonOptions)
+            ?? throw new InvalidOperationException("Sysmond my-company-periods yanıtı boş veya geçersiz.");
+
+        var items = parsed.Data ?? Array.Empty<SysmondCompanyPeriodDto>();
+        _logger.LogInformation("Sysmond my-company-periods: Count={Count}", items.Count);
+        return items;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<SysmondStockBalanceDto>> GetStockBalancesByStockAsync(
+        string accessToken,
+        Guid companyPeriodId,
+        Guid stockId,
+        CancellationToken cancellationToken = default)
+    {
+        if (stockId == Guid.Empty)
+            throw new ArgumentException("stockId zorunludur.", nameof(stockId));
+
+        return GetStockBalancesAsync(
+            accessToken,
+            companyPeriodId,
+            warehouseId: null,
+            stockId: stockId,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<SysmondStockBalanceDto>> GetStockBalancesByWarehouseAsync(
+        string accessToken,
+        Guid companyPeriodId,
+        Guid warehouseId,
+        CancellationToken cancellationToken = default)
+    {
         if (warehouseId == Guid.Empty)
             throw new ArgumentException("warehouseId zorunludur.", nameof(warehouseId));
+
+        return GetStockBalancesAsync(
+            accessToken,
+            companyPeriodId,
+            warehouseId: warehouseId,
+            stockId: null,
+            cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<SysmondStockBalanceDto>> GetStockBalancesAsync(
+        string accessToken,
+        Guid companyPeriodId,
+        Guid? warehouseId,
+        Guid? stockId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        if (companyPeriodId == Guid.Empty)
+            throw new ArgumentException("companyPeriodId zorunludur.", nameof(companyPeriodId));
 
         var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
         var all = new List<SysmondStockBalanceDto>();
@@ -114,7 +183,11 @@ public class SysmondInventoryQueryService : ISysmondInventoryQueryService
         while (true)
         {
             var url =
-                $"api/app/stock/balance?WarehouseId={warehouseId}&SkipCount={skip}&MaxResultCount={PageSize}";
+                $"api/app/stock/balance?CompanyPeriodId={companyPeriodId}&SkipCount={skip}&MaxResultCount={PageSize}";
+            if (warehouseId is Guid wh)
+                url += $"&WarehouseId={wh}";
+            if (stockId is Guid st)
+                url += $"&StockId={st}";
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -135,8 +208,10 @@ public class SysmondInventoryQueryService : ISysmondInventoryQueryService
             all.AddRange(items);
 
             _logger.LogInformation(
-                "Sysmond stock/balance: WarehouseId={WarehouseId}, Skip={Skip}, Count={Count}, Total={Total}",
+                "Sysmond stock/balance: CompanyPeriodId={CompanyPeriodId}, WarehouseId={WarehouseId}, StockId={StockId}, Skip={Skip}, Count={Count}, Total={Total}",
+                companyPeriodId,
                 warehouseId,
+                stockId,
                 skip,
                 items.Count,
                 page.TotalCount);

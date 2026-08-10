@@ -51,8 +51,24 @@ public class SysmondSyncServiceTests
             .Setup(s => s.GetWarehouseStocksAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<SysmondWarehouseStockDto>());
         _inventoryQuery
+            .Setup(s => s.GetMyCompanyPeriodsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SysmondCompanyPeriodDto>
+            {
+                new()
+                {
+                    Id = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                    CompanyId = Guid.Parse("f9e4c15a-307a-d6e5-495a-3a22008d01a1"),
+                    IsActive = true,
+                    Name = "2026"
+                }
+            });
+        _inventoryQuery
+            .Setup(s => s.GetStockBalancesByStockAsync(
+                It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<SysmondStockBalanceDto>());
+        _inventoryQuery
             .Setup(s => s.GetStockBalancesByWarehouseAsync(
-                It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<SysmondStockBalanceDto>());
     }
 
@@ -257,8 +273,12 @@ public class SysmondSyncServiceTests
         _warehouseRepository
             .Setup(r => r.GetByIdAsync(remoteWhId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Warehouse?)null);
+        _productRepository
+            .Setup(r => r.GetByCompanyIdAsync(companyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Product> { product });
         _inventoryQuery
-            .Setup(s => s.GetStockBalancesByWarehouseAsync(AccessToken, remoteWhId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetStockBalancesByStockAsync(
+                AccessToken, It.IsAny<Guid>(), stockId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SysmondStockBalanceDto>
             {
                 SysmondSyncServiceTestHelper.CreateBalance(stockId, remoteWhId, 7.4)
@@ -306,8 +326,23 @@ public class SysmondSyncServiceTests
         _warehouseRepository
             .Setup(r => r.GetByIdAsync(remoteWhId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Warehouse?)null);
+        _productRepository
+            .Setup(r => r.GetByCompanyIdAsync(companyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Product>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    CompanyId = companyId,
+                    Sku = "X",
+                    Name = "X",
+                    ExternalSysmondId = stockId,
+                    CreatedAt = DateTime.UtcNow
+                }
+            });
         _inventoryQuery
-            .Setup(s => s.GetStockBalancesByWarehouseAsync(AccessToken, remoteWhId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetStockBalancesByStockAsync(
+                AccessToken, It.IsAny<Guid>(), stockId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SysmondStockBalanceDto>
             {
                 SysmondSyncServiceTestHelper.CreateBalance(stockId, remoteWhId, 3)
@@ -479,8 +514,12 @@ public class SysmondSyncServiceTests
         _inventoryQuery
             .Setup(s => s.GetWarehouseStocksAsync(AccessToken, companyId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Sysmond warehouse-stock başarısız (403): forbidden"));
+        _productRepository
+            .Setup(r => r.GetByCompanyIdAsync(companyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Product> { product });
         _inventoryQuery
-            .Setup(s => s.GetStockBalancesByWarehouseAsync(AccessToken, remoteWhId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetStockBalancesByStockAsync(
+                AccessToken, It.IsAny<Guid>(), stockId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SysmondStockBalanceDto>
             {
                 SysmondSyncServiceTestHelper.CreateBalance(stockId, remoteWhId, 4)
