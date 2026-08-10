@@ -1,8 +1,9 @@
+using Core.DTOs.Products;
 using Core.DTOs.Sysmond;
 
 namespace Core.Services;
 
-/// <summary>Sysmond → yerel ürün / inventory senkronu (manuel tetikleme).</summary>
+/// <summary>Sysmond → yerel ürün / inventory senkronu + Sysmondax'a stok oluşturma.</summary>
 public interface ISysmondSyncService
 {
     /// <summary>
@@ -28,5 +29,14 @@ public interface ISysmondSyncService
     Task<SysmondFullSyncResult> SyncAllAsync(
         Guid sysmondCompanyId,
         string accessToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sysmondax <c>POST /api/app/stock</c> + yerel Product (ve openingQuantity → Inventory).
+    /// </summary>
+    Task<ProductResponse> CreateStockAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        SysmondCreateStockRequest request,
         CancellationToken cancellationToken = default);
 }

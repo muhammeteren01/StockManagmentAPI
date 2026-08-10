@@ -23,6 +23,7 @@ internal static class SysmondSyncServiceTestHelper
         new(
             stockQuery.Object,
             inventoryQuery.Object,
+            Mock.Of<ISysmondStockCommandService>(),
             productRepository.Object,
             companyRepository.Object,
             warehouseRepository.Object,

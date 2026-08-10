@@ -138,4 +138,86 @@ public static class SysmondProductMapper
 
     private static decimal ToDecimal(double value) =>
         Math.Round((decimal)value, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// Yerel create isteği → Sysmond StockCreateDto.
+    /// measureUnitId / currency yoksa çağıran varsayılan vermeli.
+    /// </summary>
+    public static SysmondStockCreateDto ToStockCreateDto(
+        SysmondCreateStockRequest request,
+        Guid companyId)
+    {
+        var measureUnitId = request.MeasureUnitId
+            ?? request.Price?.MeasureUnitId
+            ?? Guid.Empty;
+
+        var price = request.Price;
+        if (price is not null && price.MeasureUnitId == Guid.Empty && measureUnitId != Guid.Empty)
+        {
+            price = new SysmondDefaultStockPriceCreateDto
+            {
+                SaleCurrencyId = price.SaleCurrencyId,
+                SaleUnitPrice = price.SaleUnitPrice,
+                PurchaseCurrencyId = price.PurchaseCurrencyId,
+                PurchaseUnitPrice = price.PurchaseUnitPrice,
+                Description = price.Description,
+                MeasureUnitId = measureUnitId
+            };
+        }
+
+        return new SysmondStockCreateDto
+        {
+            Name = request.Name?.Trim(),
+            Description = request.Description?.Trim(),
+            BrandName = request.BrandName?.Trim(),
+            ModelName = request.ModelName?.Trim(),
+            CompanyId = companyId,
+            Type = request.Type == 20 ? 20 : 10,
+            VatPercent = request.VatPercent,
+            IsActive = request.IsActive,
+            Code = string.IsNullOrWhiteSpace(request.Code) ? null : request.Code.Trim(),
+            MeasureUnitId = measureUnitId == Guid.Empty ? null : measureUnitId,
+            StockTrackingEnabled = request.StockTrackingEnabled,
+            StockQuantityControlEnabled = request.StockQuantityControlEnabled,
+            Price = price,
+            OpeningQuantity = request.OpeningQuantity
+        };
+    }
+
+    /// <summary>Sysmond create + dönen id → yerel Product.</summary>
+    public static Product ToNewProductFromCreate(
+        SysmondCreateStockRequest request,
+        Guid localCompanyId,
+        Guid sysmondStockId)
+    {
+        var sale = request.Price?.SaleUnitPrice ?? 0;
+        var purchase = request.Price?.PurchaseUnitPrice ?? sale;
+        var saleCur = request.Price?.SaleCurrencyId;
+        var purchaseCur = request.Price?.PurchaseCurrencyId;
+
+        return new Product
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = localCompanyId,
+            CategoryId = null,
+            SupplierId = null,
+            Type = MapType(request.Type),
+            ExternalSysmondId = sysmondStockId,
+            MeasureUnitId = request.MeasureUnitId ?? request.Price?.MeasureUnitId,
+            Sku = string.IsNullOrWhiteSpace(request.Code)
+                ? sysmondStockId.ToString("N")
+                : request.Code.Trim(),
+            Name = string.IsNullOrWhiteSpace(request.Name)
+                ? request.Code ?? sysmondStockId.ToString("N")
+                : request.Name.Trim(),
+            Description = request.Description?.Trim() ?? string.Empty,
+            UnitPrice = ToDecimal(purchase),
+            PurchaseCurrencyId = purchaseCur is 0 or null ? null : purchaseCur,
+            SellingPrice = ToDecimal(sale),
+            SaleCurrencyId = saleCur is 0 or null ? null : saleCur,
+            MinStockLevel = 0,
+            Status = request.IsActive ? ProductStatus.Active : ProductStatus.Discontinued,
+            CreatedAt = DateTime.UtcNow
+        };
+    }
 }

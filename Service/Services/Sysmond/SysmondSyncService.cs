@@ -1,3 +1,4 @@
+using Core.DTOs.Products;
 using Core.DTOs.Sysmond;
 using Core.Entities;
 using Core.Mappings;
@@ -23,6 +24,7 @@ public class SysmondSyncService : ISysmondSyncService
 {
     private readonly ISysmondStockQueryService _stockQuery;
     private readonly ISysmondInventoryQueryService _inventoryQuery;
+    private readonly ISysmondStockCommandService _stockCommand;
     private readonly IProductRepository _productRepository;
     private readonly ICompanyRepository _companyRepository;
     private readonly IWarehouseRepository _warehouseRepository;
@@ -33,6 +35,7 @@ public class SysmondSyncService : ISysmondSyncService
     public SysmondSyncService(
         ISysmondStockQueryService stockQuery,
         ISysmondInventoryQueryService inventoryQuery,
+        ISysmondStockCommandService stockCommand,
         IProductRepository productRepository,
         ICompanyRepository companyRepository,
         IWarehouseRepository warehouseRepository,
@@ -42,6 +45,7 @@ public class SysmondSyncService : ISysmondSyncService
     {
         _stockQuery = stockQuery;
         _inventoryQuery = inventoryQuery;
+        _stockCommand = stockCommand;
         _productRepository = productRepository;
         _companyRepository = companyRepository;
         _warehouseRepository = warehouseRepository;
@@ -424,6 +428,107 @@ public class SysmondSyncService : ISysmondSyncService
             Products = products,
             Inventories = inventories
         };
+    }
+
+    /// <inheritdoc />
+    public async Task<ProductResponse> CreateStockAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        SysmondCreateStockRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureSyncArgs(sysmondCompanyId, accessToken);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(request.Name) && string.IsNullOrWhiteSpace(request.Code))
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure("name", "name veya code zorunludur.")
+            ]);
+        }
+
+        var company = await _companyRepository.GetByIdAsync(sysmondCompanyId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Company bulunamadı (Sysmond CompanyId={sysmondCompanyId}).");
+
+        var body = SysmondProductMapper.ToStockCreateDto(request, company.Id);
+        if (body.Price is null)
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure("price", "price zorunludur (sale/purchase + currency + measureUnitId).")
+            ]);
+        }
+
+        if (body.MeasureUnitId is null || body.MeasureUnitId == Guid.Empty)
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure("measureUnitId", "measureUnitId zorunludur.")
+            ]);
+        }
+
+        if (!string.IsNullOrWhiteSpace(body.Code))
+        {
+            var existingSku = await _productRepository.GetBySkuAsync(company.Id, body.Code, cancellationToken);
+            if (existingSku is not null)
+                throw new InvalidOperationException($"Bu şirkette SKU zaten kullanılıyor: {body.Code}");
+        }
+
+        var sysmondStockId = await _stockCommand.CreateStockAsync(accessToken, body, cancellationToken);
+
+        var product = SysmondProductMapper.ToNewProductFromCreate(request, company.Id, sysmondStockId);
+        await _productRepository.AddAsync(product, cancellationToken);
+
+        var openings = request.OpeningQuantity ?? [];
+        foreach (var opening in openings)
+        {
+            if (opening.WarehouseId is null || opening.WarehouseId == Guid.Empty)
+                continue;
+
+            var qty = opening.Quantity.HasValue
+                ? (int)Math.Round(opening.Quantity.Value, MidpointRounding.AwayFromZero)
+                : 0;
+            if (qty < 0)
+                qty = 0;
+
+            var warehouse = await _warehouseRepository.GetByExternalSysmondIdAsync(
+                opening.WarehouseId.Value, cancellationToken);
+            warehouse ??= await _warehouseRepository.GetByIdAsync(opening.WarehouseId.Value, cancellationToken);
+
+            if (warehouse is null || warehouse.CompanyId != company.Id)
+            {
+                _logger.LogWarning(
+                    "Sysmond stock create: opening warehouse bulunamadı WarehouseId={WarehouseId}",
+                    opening.WarehouseId);
+                continue;
+            }
+
+            var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(
+                product.Id, warehouse.Id, cancellationToken);
+
+            if (inventory is null)
+            {
+                await _inventoryRepository.AddAsync(new Inventory
+                {
+                    Id = Guid.NewGuid(),
+                    CompanyId = company.Id,
+                    ProductId = product.Id,
+                    WarehouseId = warehouse.Id,
+                    Quantity = qty,
+                    LastUpdated = DateTime.UtcNow
+                }, cancellationToken);
+            }
+            else
+            {
+                inventory.Quantity = qty;
+                inventory.LastUpdated = DateTime.UtcNow;
+                _inventoryRepository.Update(inventory);
+            }
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ProductMapper.ToResponse(product);
     }
 
     private static void EnsureSyncArgs(Guid sysmondCompanyId, string accessToken)

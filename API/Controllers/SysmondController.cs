@@ -1,3 +1,4 @@
+using Core.DTOs.Sysmond;
 using Core.Services;
 using Core.Validations;
 using FluentValidation.Results;
@@ -64,6 +65,22 @@ public class SysmondController : ControllerBase
         var (cid, token) = RequireCompanyAndBearer(companyId);
         var result = await _syncService.SyncAllAsync(cid, token, cancellationToken);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Sysmondax'a stok oluşturur (POST /api/app/stock) ve yerel Product (+ openingQuantity → Inventory) yazar.
+    /// Örnek: POST /api/sysmond/stocks?companyId={guid}
+    /// openingQuantity: [{ warehouseId, quantity }] — ilgili depoya açılış adedi.
+    /// </summary>
+    [HttpPost("stocks")]
+    public async Task<IActionResult> CreateStock(
+        [FromQuery] Guid companyId,
+        [FromBody] SysmondCreateStockRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var created = await _syncService.CreateStockAsync(cid, token, request, cancellationToken);
+        return Ok(created);
     }
 
     private (Guid CompanyId, string AccessToken) RequireCompanyAndBearer(Guid companyId)
