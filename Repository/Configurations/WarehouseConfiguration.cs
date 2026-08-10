@@ -15,10 +15,15 @@ public class WarehouseConfiguration : IEntityTypeConfiguration<Warehouse>
 
         builder.Property(x => x.Id).HasColumnName("id");
         builder.Property(x => x.CompanyId).HasColumnName("company_id").IsRequired();
+        builder.Property(x => x.ExternalSysmondId).HasColumnName("external_sysmond_id");
         builder.Property(x => x.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
         builder.Property(x => x.Location).HasColumnName("location").HasMaxLength(255).IsRequired();
         builder.Property(x => x.Capacity).HasColumnName("capacity");
         builder.Property(x => x.IsActive).HasColumnName("is_active").IsRequired();
+
+        builder.HasIndex(x => x.ExternalSysmondId)
+            .IsUnique()
+            .HasFilter("[external_sysmond_id] IS NOT NULL");
 
         builder.HasOne(x => x.Company)
             .WithMany(x => x.Warehouses)

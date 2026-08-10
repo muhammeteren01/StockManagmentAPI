@@ -61,7 +61,7 @@ public class ProductService : IProductService
     {
         await ValidationHelper.EnsureValidAsync(_createValidator, request, cancellationToken);
         var companyId = TenantGuard.ResolveCompanyId(_currentUser, request.CompanyId);
-        await EnsureSameCompanyReferencesAsync(companyId, request.CategoryId, request.SupplierId, cancellationToken);
+        await EnsureOptionalSameCompanyReferencesAsync(companyId, request.CategoryId, request.SupplierId, cancellationToken);
 
         var existingSku = await _repository.GetBySkuAsync(companyId, request.Sku, cancellationToken);
         if (existingSku is not null)
@@ -79,7 +79,7 @@ public class ProductService : IProductService
         var entity = await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Product bulunamadı: {id}");
 
-        await EnsureSameCompanyReferencesAsync(entity.CompanyId, request.CategoryId, request.SupplierId, cancellationToken);
+        await EnsureOptionalSameCompanyReferencesAsync(entity.CompanyId, request.CategoryId, request.SupplierId, cancellationToken);
 
         var existingSku = await _repository.GetBySkuAsync(entity.CompanyId, request.Sku, cancellationToken);
         if (existingSku is not null && existingSku.Id != id)
@@ -99,17 +99,24 @@ public class ProductService : IProductService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task EnsureSameCompanyReferencesAsync(
-        Guid companyId, Guid categoryId, Guid supplierId, CancellationToken cancellationToken)
+    /// <summary>CategoryId / SupplierId verildiyse aynı şirket kontrolü; null veya Empty ise atlanır.</summary>
+    private async Task EnsureOptionalSameCompanyReferencesAsync(
+        Guid companyId, Guid? categoryId, Guid? supplierId, CancellationToken cancellationToken)
     {
-        var category = await _categoryRepository.GetByIdAsync(categoryId, cancellationToken)
-            ?? throw new InvalidOperationException($"Kategori bulunamadı: {categoryId}");
-        if (category.CompanyId != companyId)
-            throw new InvalidOperationException("Kategori farklı bir şirkete ait.");
+        if (categoryId is Guid cid && cid != Guid.Empty)
+        {
+            var category = await _categoryRepository.GetByIdAsync(cid, cancellationToken)
+                ?? throw new InvalidOperationException($"Kategori bulunamadı: {cid}");
+            if (category.CompanyId != companyId)
+                throw new InvalidOperationException("Kategori farklı bir şirkete ait.");
+        }
 
-        var supplier = await _supplierRepository.GetByIdAsync(supplierId, cancellationToken)
-            ?? throw new InvalidOperationException($"Tedarikçi bulunamadı: {supplierId}");
-        if (supplier.CompanyId != companyId)
-            throw new InvalidOperationException("Tedarikçi farklı bir şirkete ait.");
+        if (supplierId is Guid sid && sid != Guid.Empty)
+        {
+            var supplier = await _supplierRepository.GetByIdAsync(sid, cancellationToken)
+                ?? throw new InvalidOperationException($"Tedarikçi bulunamadı: {sid}");
+            if (supplier.CompanyId != companyId)
+                throw new InvalidOperationException("Tedarikçi farklı bir şirkete ait.");
+        }
     }
 }

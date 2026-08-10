@@ -11,6 +11,11 @@ public class Inventory
     public Guid ProductId { get; set; }
     public Guid WarehouseId { get; set; }
 
+    /// <summary>
+    /// Sysmond WarehouseStock.Id (varsa). Yoksa orphan silme Product+Warehouse ExternalSysmondId ile yapılır.
+    /// </summary>
+    public Guid? ExternalSysmondId { get; set; }
+
     /// <summary>Gerçek zamanlı stok miktarı</summary>
     public int Quantity { get; set; }
 

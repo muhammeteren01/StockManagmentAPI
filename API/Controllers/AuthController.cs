@@ -1,22 +1,25 @@
 using System.Security.Claims;
 using Core.Authorization;
 using Core.DTOs.Auth;
+using Core.DTOs.Sysmond;
 using Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
-/// <summary>Kimlik doğrulama endpoint'leri (register, login, me).</summary>
+/// <summary>Kimlik doğrulama endpoint'leri (register, login, me, sysmond-token).</summary>
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly ISysmondTokenService _sysmondTokenService;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, ISysmondTokenService sysmondTokenService)
     {
         _authService = authService;
+        _sysmondTokenService = sysmondTokenService;
     }
 
     /// <summary>Yeni kullanıcı kaydı; JWT döner. Yalnızca SuperAdmin / CompanyAdmin.</summary>
@@ -34,6 +37,17 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.LoginAsync(request, cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Sysmondax OAuth access token alır (yapılandırmadaki username/password + client credentials ile password grant).
+    /// </summary>
+    [HttpPost("sysmond-token")]
+    [AllowAnonymous]
+    public async Task<ActionResult<SysmondTokenResponse>> GetSysmondToken(CancellationToken cancellationToken)
+    {
+        var response = await _sysmondTokenService.GetAccessTokenAsync(cancellationToken);
         return Ok(response);
     }
 

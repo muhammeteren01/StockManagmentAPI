@@ -9,6 +9,9 @@ public class Warehouse
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
 
+    /// <summary>Sysmond Warehouse.Id; null = yerel oluşturulan depo.</summary>
+    public Guid? ExternalSysmondId { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public string Location { get; set; } = string.Empty;
     public int? Capacity { get; set; }

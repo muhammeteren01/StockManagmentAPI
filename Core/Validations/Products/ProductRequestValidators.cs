@@ -8,8 +8,7 @@ public class CreateProductRequestValidator : AbstractValidator<CreateProductRequ
 {
     public CreateProductRequestValidator()
     {
-        RuleFor(x => x.CategoryId).NotEmpty();
-        RuleFor(x => x.SupplierId).NotEmpty();
+        RuleFor(x => x.Type).IsInEnum();
         RuleFor(x => x.Sku).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Barcode).MaximumLength(100).When(x => !string.IsNullOrEmpty(x.Barcode));
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
@@ -25,8 +24,7 @@ public class UpdateProductRequestValidator : AbstractValidator<UpdateProductRequ
 {
     public UpdateProductRequestValidator()
     {
-        RuleFor(x => x.CategoryId).NotEmpty();
-        RuleFor(x => x.SupplierId).NotEmpty();
+        RuleFor(x => x.Type).IsInEnum();
         RuleFor(x => x.Sku).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Barcode).MaximumLength(100).When(x => !string.IsNullOrEmpty(x.Barcode));
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);

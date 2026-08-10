@@ -15,11 +15,12 @@ namespace API.Tests.Controllers.Auth;
 public class AuthControllerRegisterTests
 {
     private readonly Mock<IAuthService> _authService = new();
+    private readonly Mock<ISysmondTokenService> _sysmondTokenService = new();
     private readonly AuthController _sut;
 
     public AuthControllerRegisterTests()
     {
-        _sut = new AuthController(_authService.Object);
+        _sut = new AuthController(_authService.Object, _sysmondTokenService.Object);
     }
 
     /// <summary>

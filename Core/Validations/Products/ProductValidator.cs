@@ -11,11 +11,8 @@ public class ProductValidator : AbstractValidator<Product>
         RuleFor(x => x.CompanyId)
             .NotEmpty().WithMessage("Şirket zorunludur.");
 
-        RuleFor(x => x.CategoryId)
-            .NotEmpty().WithMessage("Kategori zorunludur.");
-
-        RuleFor(x => x.SupplierId)
-            .NotEmpty().WithMessage("Tedarikçi zorunludur.");
+        RuleFor(x => x.Type)
+            .IsInEnum().WithMessage("Geçersiz ürün tipi.");
 
         RuleFor(x => x.Sku)
             .NotEmpty().WithMessage("SKU zorunludur.")

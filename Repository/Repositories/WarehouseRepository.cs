@@ -12,6 +12,12 @@ public class WarehouseRepository : GenericRepository<Warehouse>, IWarehouseRepos
     {
     }
 
+    public async Task<Warehouse?> GetByExternalSysmondIdAsync(Guid externalSysmondId, CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .FirstOrDefaultAsync(x => x.ExternalSysmondId == externalSysmondId, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Warehouse>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
     {
         return await DbSet.AsNoTracking()

@@ -35,30 +35,28 @@ public class CreateProductRequestValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    /// <summary>CategoryId boş → hata.</summary>
+    /// <summary>CategoryId boş → geçerli (opsiyonel; Sysmond Type kullanılır).</summary>
     [Fact]
-    public void Validate_WhenCategoryIdEmpty_ReturnsError()
+    public void Validate_WhenCategoryIdEmpty_Succeeds()
     {
         var request = ValidRequest();
         request.CategoryId = Guid.Empty;
 
         var result = _sut.Validate(request);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateProductRequest.CategoryId));
+        result.IsValid.Should().BeTrue();
     }
 
-    /// <summary>SupplierId boş → hata.</summary>
+    /// <summary>SupplierId null → geçerli (opsiyonel).</summary>
     [Fact]
-    public void Validate_WhenSupplierIdEmpty_ReturnsError()
+    public void Validate_WhenSupplierIdNull_Succeeds()
     {
         var request = ValidRequest();
-        request.SupplierId = Guid.Empty;
+        request.SupplierId = null;
 
         var result = _sut.Validate(request);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateProductRequest.SupplierId));
+        result.IsValid.Should().BeTrue();
     }
 
     /// <summary>Sku boş → hata.</summary>

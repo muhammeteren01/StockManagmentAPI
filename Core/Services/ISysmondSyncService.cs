@@ -1,0 +1,32 @@
+using Core.DTOs.Sysmond;
+
+namespace Core.Services;
+
+/// <summary>Sysmond → yerel ürün / inventory senkronu (manuel tetikleme).</summary>
+public interface ISysmondSyncService
+{
+    /// <summary>
+    /// Stock-query'den ürünleri çeker; ExternalSysmondId veya (CompanyId, Sku) ile upsert eder.
+    /// Remote set'te olmayan, ExternalSysmondId'li yerel ürünleri siler (Sysmond kaynak; local-only ürünler kalır).
+    /// </summary>
+    Task<SysmondProductSyncResult> SyncProductsAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Warehouse + stock/balance (miktar) → Inventory upsert; orphan silme.
+    /// Warehouse-stock (varsa) ExternalSysmondId sağlar; 403 olursa soft-error ile devam.
+    /// Ürünler önceden sync edilmiş olmalı (Product.ExternalSysmondId).
+    /// </summary>
+    Task<SysmondInventorySyncResult> SyncInventoriesAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Önce ürün, sonra inventory senkronu.</summary>
+    Task<SysmondFullSyncResult> SyncAllAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        CancellationToken cancellationToken = default);
+}

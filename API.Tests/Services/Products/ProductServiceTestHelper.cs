@@ -138,15 +138,23 @@ internal static class ProductServiceTestHelper
         Mock<ISupplierRepository> supplierRepository,
         Mock<IProductRepository> productRepository,
         Guid companyId,
-        Guid categoryId,
-        Guid supplierId)
+        Guid? categoryId,
+        Guid? supplierId)
     {
-        categoryRepository
-            .Setup(r => r.GetByIdAsync(categoryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(CreateCategory(categoryId, companyId));
-        supplierRepository
-            .Setup(r => r.GetByIdAsync(supplierId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(CreateSupplier(supplierId, companyId));
+        if (categoryId is Guid cid && cid != Guid.Empty)
+        {
+            categoryRepository
+                .Setup(r => r.GetByIdAsync(cid, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(CreateCategory(cid, companyId));
+        }
+
+        if (supplierId is Guid sid && sid != Guid.Empty)
+        {
+            supplierRepository
+                .Setup(r => r.GetByIdAsync(sid, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(CreateSupplier(sid, companyId));
+        }
+
         productRepository
             .Setup(r => r.GetBySkuAsync(companyId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Product?)null);

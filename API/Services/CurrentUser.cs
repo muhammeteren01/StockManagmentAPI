@@ -49,5 +49,9 @@ public sealed class CurrentUser : ICurrentUser
 
     public bool IsSuperAdmin => Role == UserRole.SuperAdmin;
 
+    /// <summary>
+    /// Authenticated şirket kullanıcısı için filtre aktif.
+    /// Anonymous (ör. Sysmond sync Bearer) ve SuperAdmin için false → tüm şirket satırları görünür / yazılabilir.
+    /// </summary>
     public bool ApplyTenantFilter => IsAuthenticated && !IsSuperAdmin && !BypassTenantFilters;
 }

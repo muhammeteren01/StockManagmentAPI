@@ -1,0 +1,104 @@
+using Core.Services;
+using Core.Validations;
+using FluentValidation.Results;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
+
+namespace API.Controllers;
+
+/// <summary>
+/// Sysmondax manuel senkron endpoint'leri (background worker yok).
+/// Yerel JWT / SuperAdmin gerekmez — Swagger Authorize'a Sysmondax access_token yazılır;
+/// bu Bearer Sysmondax API çağrılarına iletilir.
+/// </summary>
+[ApiController]
+[Route("api/sysmond")]
+[AllowAnonymous]
+public class SysmondController : ControllerBase
+{
+    private readonly ISysmondSyncService _syncService;
+
+    public SysmondController(ISysmondSyncService syncService)
+    {
+        _syncService = syncService;
+    }
+
+    /// <summary>
+    /// Sysmond stock-query ürünlerini çeker ve yerel Product'lara upsert eder.
+    /// Örnek: POST /api/sysmond/sync/products?companyId={sysmondCompanyGuid}
+    /// </summary>
+    [HttpPost("sync/products")]
+    public async Task<IActionResult> SyncProducts(
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var result = await _syncService.SyncProductsAsync(cid, token, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Warehouse + stock/balance → Inventory upsert / orphan delete.
+    /// Örnek: POST /api/sysmond/sync/inventories?companyId={sysmondCompanyGuid}
+    /// </summary>
+    [HttpPost("sync/inventories")]
+    public async Task<IActionResult> SyncInventories(
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var result = await _syncService.SyncInventoriesAsync(cid, token, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Ürün senkronu, ardından inventory senkronu.
+    /// Örnek: POST /api/sysmond/sync?companyId={sysmondCompanyGuid}
+    /// </summary>
+    [HttpPost("sync")]
+    public async Task<IActionResult> SyncAll(
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var result = await _syncService.SyncAllAsync(cid, token, cancellationToken);
+        return Ok(result);
+    }
+
+    private (Guid CompanyId, string AccessToken) RequireCompanyAndBearer(Guid companyId)
+    {
+        if (companyId == Guid.Empty)
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure(nameof(companyId), "companyId zorunludur.")
+            ]);
+        }
+
+        var accessToken = ExtractBearerToken();
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure("Authorization", "Bearer Sysmondax access_token zorunludur.")
+            ]);
+        }
+
+        return (companyId, accessToken);
+    }
+
+    /// <summary>Authorization header'dan Bearer token okur (Sysmondax access_token).</summary>
+    private string? ExtractBearerToken()
+    {
+        var header = Request.Headers[HeaderNames.Authorization].ToString();
+        if (string.IsNullOrWhiteSpace(header))
+            return null;
+
+        const string prefix = "Bearer ";
+        if (header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return header[prefix.Length..].Trim();
+
+        return null;
+    }
+}

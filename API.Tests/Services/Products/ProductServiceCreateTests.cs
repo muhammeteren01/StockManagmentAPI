@@ -100,7 +100,7 @@ public class ProductServiceCreateTests
             .WithMessage("Şirket bilgisi bulunamadı.");
     }
 
-    /// <summary>Create: kategori yok → InvalidOperationException.</summary>
+    /// <summary>Create: CategoryId verilmiş ama kategori yok → InvalidOperationException.</summary>
     [Fact]
     public async Task CreateAsync_WhenCategoryNotFound_ThrowsInvalidOperationException()
     {
@@ -108,7 +108,7 @@ public class ProductServiceCreateTests
         ProductServiceTestHelper.SetupCompanyAdminCurrentUser(_currentUser, companyId);
         var request = ProductServiceTestHelper.ValidCreate(companyId: companyId);
         _categoryRepository
-            .Setup(r => r.GetByIdAsync(request.CategoryId, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByIdAsync(request.CategoryId!.Value, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Category?)null);
 
         var act = async () => await _sut.CreateAsync(request);
@@ -120,6 +120,36 @@ public class ProductServiceCreateTests
             Times.Never);
     }
 
+    /// <summary>Create: CategoryId/SupplierId null → referans kontrolü atlanır, kayıt oluşur.</summary>
+    [Fact]
+    public async Task CreateAsync_WhenCategoryAndSupplierNull_SucceedsWithoutReferenceChecks()
+    {
+        var companyId = Guid.NewGuid();
+        ProductServiceTestHelper.SetupCompanyAdminCurrentUser(_currentUser, companyId);
+        var request = ProductServiceTestHelper.ValidCreate(companyId: companyId);
+        request.CategoryId = null;
+        request.SupplierId = null;
+        _repository
+            .Setup(r => r.GetBySkuAsync(companyId, request.Sku, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Product?)null);
+
+        Product? added = null;
+        _repository
+            .Setup(r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()))
+            .Callback<Product, CancellationToken>((p, _) => added = p)
+            .Returns(Task.CompletedTask);
+        _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var result = await _sut.CreateAsync(request);
+
+        added.Should().NotBeNull();
+        added!.CategoryId.Should().BeNull();
+        added.SupplierId.Should().BeNull();
+        result.CategoryId.Should().BeNull();
+        _categoryRepository.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _supplierRepository.Verify(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     /// <summary>Create: kategori farklı şirkete ait → InvalidOperationException.</summary>
     [Fact]
     public async Task CreateAsync_WhenCategoryOtherCompany_ThrowsInvalidOperationException()
@@ -128,8 +158,8 @@ public class ProductServiceCreateTests
         ProductServiceTestHelper.SetupCompanyAdminCurrentUser(_currentUser, companyId);
         var request = ProductServiceTestHelper.ValidCreate(companyId: companyId);
         _categoryRepository
-            .Setup(r => r.GetByIdAsync(request.CategoryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ProductServiceTestHelper.CreateCategory(request.CategoryId, Guid.NewGuid()));
+            .Setup(r => r.GetByIdAsync(request.CategoryId!.Value, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ProductServiceTestHelper.CreateCategory(request.CategoryId!.Value, Guid.NewGuid()));
 
         var act = async () => await _sut.CreateAsync(request);
 
@@ -145,10 +175,10 @@ public class ProductServiceCreateTests
         ProductServiceTestHelper.SetupCompanyAdminCurrentUser(_currentUser, companyId);
         var request = ProductServiceTestHelper.ValidCreate(companyId: companyId);
         _categoryRepository
-            .Setup(r => r.GetByIdAsync(request.CategoryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ProductServiceTestHelper.CreateCategory(request.CategoryId, companyId));
+            .Setup(r => r.GetByIdAsync(request.CategoryId!.Value, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ProductServiceTestHelper.CreateCategory(request.CategoryId!.Value, companyId));
         _supplierRepository
-            .Setup(r => r.GetByIdAsync(request.SupplierId, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByIdAsync(request.SupplierId!.Value, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Supplier?)null);
 
         var act = async () => await _sut.CreateAsync(request);
@@ -165,12 +195,11 @@ public class ProductServiceCreateTests
         ProductServiceTestHelper.SetupCompanyAdminCurrentUser(_currentUser, companyId);
         var request = ProductServiceTestHelper.ValidCreate(companyId: companyId);
         _categoryRepository
-            .Setup(r => r.GetByIdAsync(request.CategoryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ProductServiceTestHelper.CreateCategory(request.CategoryId, companyId));
+            .Setup(r => r.GetByIdAsync(request.CategoryId!.Value, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ProductServiceTestHelper.CreateCategory(request.CategoryId!.Value, companyId));
         _supplierRepository
-            .Setup(r => r.GetByIdAsync(request.SupplierId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ProductServiceTestHelper.CreateSupplier(request.SupplierId, Guid.NewGuid()));
-
+            .Setup(r => r.GetByIdAsync(request.SupplierId!.Value, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ProductServiceTestHelper.CreateSupplier(request.SupplierId!.Value, Guid.NewGuid()));
         var act = async () => await _sut.CreateAsync(request);
 
         await act.Should().ThrowAsync<InvalidOperationException>()

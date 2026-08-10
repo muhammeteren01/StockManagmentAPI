@@ -43,6 +43,7 @@ try
     builder.Services.Configure<SeedSettings>(builder.Configuration.GetSection(SeedSettings.SectionName));
     builder.Services.AddSwaggerDocumentation();
     builder.Services.AddJwtAuthentication(builder.Configuration);
+    builder.Services.AddSysmondIntegration(builder.Configuration);
     builder.Services.AddValidatorsFromAssemblyContaining<UserValidator>();
 
     builder.Services.AddDbContext<AppDbContext>(options =>

@@ -14,7 +14,9 @@ namespace API.Tests.Controllers.Auth;
 /// </summary>
 public class AuthControllerMeTests
 {
-    private readonly AuthController _sut = new(new Mock<IAuthService>().Object);
+    private readonly AuthController _sut = new(
+        new Mock<IAuthService>().Object,
+        new Mock<ISysmondTokenService>().Object);
 
     /// <summary>
     /// Me: tüm claim'ler (id, email, name, role, company_id) doluysa Ok gövdesinde hepsi görünür.

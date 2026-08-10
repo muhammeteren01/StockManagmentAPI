@@ -111,6 +111,10 @@ namespace Repository.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("company_id");
 
+                    b.Property<Guid?>("ExternalSysmondId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("external_sysmond_id");
+
                     b.Property<DateTime>("LastUpdated")
                         .HasColumnType("datetime2")
                         .HasColumnName("last_updated");
@@ -138,6 +142,10 @@ namespace Repository.Migrations
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("ExternalSysmondId")
+                        .IsUnique()
+                        .HasFilter("[external_sysmond_id] IS NOT NULL");
+
                     b.HasIndex("WarehouseId");
 
                     b.HasIndex("ProductId", "WarehouseId")
@@ -158,7 +166,7 @@ namespace Repository.Migrations
                         .HasColumnType("nvarchar(100)")
                         .HasColumnName("barcode");
 
-                    b.Property<Guid>("CategoryId")
+                    b.Property<Guid?>("CategoryId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("category_id");
 
@@ -175,6 +183,14 @@ namespace Repository.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
 
+                    b.Property<Guid?>("ExternalSysmondId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("external_sysmond_id");
+
+                    b.Property<Guid?>("MeasureUnitId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("measure_unit_id");
+
                     b.Property<int>("MinStockLevel")
                         .HasColumnType("int")
                         .HasColumnName("min_stock_level");
@@ -184,6 +200,14 @@ namespace Repository.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)")
                         .HasColumnName("name");
+
+                    b.Property<int?>("PurchaseCurrencyId")
+                        .HasColumnType("int")
+                        .HasColumnName("purchase_currency_id");
+
+                    b.Property<int?>("SaleCurrencyId")
+                        .HasColumnType("int")
+                        .HasColumnName("sale_currency_id");
 
                     b.Property<decimal>("SellingPrice")
                         .HasColumnType("decimal(18,2)")
@@ -201,9 +225,13 @@ namespace Repository.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("status");
 
-                    b.Property<Guid>("SupplierId")
+                    b.Property<Guid?>("SupplierId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("supplier_id");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int")
+                        .HasColumnName("type");
 
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("decimal(18,2)")
@@ -212,6 +240,10 @@ namespace Repository.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("ExternalSysmondId")
+                        .IsUnique()
+                        .HasFilter("[external_sysmond_id] IS NOT NULL");
 
                     b.HasIndex("SupplierId");
 
@@ -618,6 +650,10 @@ namespace Repository.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("company_id");
 
+                    b.Property<Guid?>("ExternalSysmondId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("external_sysmond_id");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit")
                         .HasColumnName("is_active");
@@ -637,6 +673,10 @@ namespace Repository.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId");
+
+                    b.HasIndex("ExternalSysmondId")
+                        .IsUnique()
+                        .HasFilter("[external_sysmond_id] IS NOT NULL");
 
                     b.ToTable("warehouses", (string)null);
                 });
@@ -684,8 +724,7 @@ namespace Repository.Migrations
                     b.HasOne("Core.Entities.Category", "Category")
                         .WithMany("Products")
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Core.Entities.Company", "Company")
                         .WithMany("Products")
@@ -696,8 +735,7 @@ namespace Repository.Migrations
                     b.HasOne("Core.Entities.Supplier", "Supplier")
                         .WithMany("Products")
                         .HasForeignKey("SupplierId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Category");
 

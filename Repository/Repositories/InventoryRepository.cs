@@ -18,6 +18,12 @@ public class InventoryRepository : GenericRepository<Inventory>, IInventoryRepos
             .FirstOrDefaultAsync(x => x.ProductId == productId && x.WarehouseId == warehouseId, cancellationToken);
     }
 
+    public async Task<Inventory?> GetByExternalSysmondIdAsync(Guid externalSysmondId, CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .FirstOrDefaultAsync(x => x.ExternalSysmondId == externalSysmondId, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Inventory>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default)
     {
         return await DbSet.AsNoTracking()
@@ -29,6 +35,13 @@ public class InventoryRepository : GenericRepository<Inventory>, IInventoryRepos
     {
         return await DbSet.AsNoTracking()
             .Where(x => x.ProductId == productId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Inventory>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        return await DbSet.AsNoTracking()
+            .Where(x => x.CompanyId == companyId)
             .ToListAsync(cancellationToken);
     }
 }

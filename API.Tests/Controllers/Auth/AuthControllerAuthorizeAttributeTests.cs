@@ -23,6 +23,17 @@ public class AuthControllerAuthorizeAttributeTests
             .Should().ContainSingle();
     }
 
+    /// <summary>GetSysmondToken: [AllowAnonymous] — kimlik doğrulama gerekmez.</summary>
+    [Fact]
+    public void GetSysmondToken_HasAllowAnonymousAttribute()
+    {
+        var method = typeof(AuthController).GetMethod(nameof(AuthController.GetSysmondToken));
+        method.Should().NotBeNull();
+
+        method!.GetCustomAttributes<AllowAnonymousAttribute>(inherit: true)
+            .Should().ContainSingle();
+    }
+
     /// <summary>Register: [Authorize(Roles = CompanyAdmins)] — SuperAdmin + CompanyAdmin.</summary>
     [Fact]
     public void Register_AuthorizeRolesCompanyAdmins()
