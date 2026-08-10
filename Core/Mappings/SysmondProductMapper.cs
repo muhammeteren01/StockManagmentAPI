@@ -220,4 +220,40 @@ public static class SysmondProductMapper
             CreatedAt = DateTime.UtcNow
         };
     }
+
+    /// <summary>Update isteği → Sysmond StockUpdateDto.</summary>
+    public static SysmondStockUpdateDto ToStockUpdateDto(
+        SysmondUpdateStockRequest request,
+        Guid companyId,
+        Guid sysmondStockId) =>
+        new()
+        {
+            Id = sysmondStockId,
+            Name = request.Name?.Trim(),
+            Description = request.Description?.Trim(),
+            BrandName = request.BrandName?.Trim(),
+            ModelName = request.ModelName?.Trim(),
+            CompanyId = companyId,
+            Type = request.Type == 20 ? 20 : 10,
+            VatPercent = request.VatPercent,
+            IsActive = request.IsActive,
+            Code = string.IsNullOrWhiteSpace(request.Code) ? null : request.Code.Trim(),
+            MeasureUnitId = request.MeasureUnitId,
+            StockTrackingEnabled = request.StockTrackingEnabled,
+            StockQuantityControlEnabled = request.StockQuantityControlEnabled
+        };
+
+    /// <summary>Update isteğini yerel Product'a uygular (ExternalSysmondId / CompanyId korunur).</summary>
+    public static void ApplyUpdateFromRequest(Product entity, SysmondUpdateStockRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.Name))
+            entity.Name = request.Name.Trim();
+        entity.Description = request.Description?.Trim() ?? entity.Description;
+        if (!string.IsNullOrWhiteSpace(request.Code))
+            entity.Sku = request.Code.Trim();
+        entity.Type = MapType(request.Type);
+        if (request.MeasureUnitId is Guid mu && mu != Guid.Empty)
+            entity.MeasureUnitId = mu;
+        entity.Status = request.IsActive ? ProductStatus.Active : ProductStatus.Discontinued;
+    }
 }

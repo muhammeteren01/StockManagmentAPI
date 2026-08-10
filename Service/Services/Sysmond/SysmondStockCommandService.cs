@@ -73,6 +73,44 @@ public class SysmondStockCommandService : ISysmondStockCommandService
         return parsed.Data.Id;
     }
 
+    /// <inheritdoc />
+    public async Task UpdateStockAsync(
+        string accessToken,
+        SysmondStockUpdateDto body,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        ArgumentNullException.ThrowIfNull(body);
+        if (body.Id == Guid.Empty)
+            throw new ArgumentException("id zorunludur.", nameof(body));
+        if (body.CompanyId == Guid.Empty)
+            throw new ArgumentException("companyId zorunludur.", nameof(body));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var json = JsonSerializer.Serialize(body, JsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, "api/app/stock")
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond stock update başarısız ({(int)response.StatusCode}): {Truncate(responseBody, 800)}");
+        }
+
+        _logger.LogInformation(
+            "Sysmond stock update OK: CompanyId={CompanyId}, StockId={StockId}, Name={Name}",
+            body.CompanyId,
+            body.Id,
+            body.Name);
+    }
+
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength] + "...";
 }

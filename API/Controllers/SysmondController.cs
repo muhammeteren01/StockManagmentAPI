@@ -83,6 +83,22 @@ public class SysmondController : ControllerBase
         return Ok(created);
     }
 
+    /// <summary>
+    /// Sysmondax stok günceller (PUT /api/app/stock) ve yerel Product'ı günceller.
+    /// id = Sysmond stock id (ExternalSysmondId). Örnek: PUT /api/sysmond/stocks/{id}?companyId={guid}
+    /// </summary>
+    [HttpPut("stocks/{id:guid}")]
+    public async Task<IActionResult> UpdateStock(
+        Guid id,
+        [FromQuery] Guid companyId,
+        [FromBody] SysmondUpdateStockRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var updated = await _syncService.UpdateStockAsync(cid, token, id, request, cancellationToken);
+        return Ok(updated);
+    }
+
     private (Guid CompanyId, string AccessToken) RequireCompanyAndBearer(Guid companyId)
     {
         if (companyId == Guid.Empty)

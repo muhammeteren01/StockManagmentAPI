@@ -531,6 +531,55 @@ public class SysmondSyncService : ISysmondSyncService
         return ProductMapper.ToResponse(product);
     }
 
+    /// <inheritdoc />
+    public async Task<ProductResponse> UpdateStockAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondStockId,
+        SysmondUpdateStockRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureSyncArgs(sysmondCompanyId, accessToken);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (sysmondStockId == Guid.Empty)
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure("id", "Sysmond stock id zorunludur.")
+            ]);
+        }
+
+        var company = await _companyRepository.GetByIdAsync(sysmondCompanyId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Company bulunamadı (Sysmond CompanyId={sysmondCompanyId}).");
+
+        var product = await _productRepository.GetByExternalSysmondIdAsync(sysmondStockId, cancellationToken)
+            ?? throw new KeyNotFoundException(
+                $"Product bulunamadı (ExternalSysmondId={sysmondStockId}). Önce sync veya create yapın.");
+
+        if (product.CompanyId != company.Id)
+            throw new InvalidOperationException("Product farklı şirkete ait.");
+
+        if (!string.IsNullOrWhiteSpace(request.Code))
+        {
+            var existingSku = await _productRepository.GetBySkuAsync(company.Id, request.Code.Trim(), cancellationToken);
+            if (existingSku is not null && existingSku.Id != product.Id)
+                throw new InvalidOperationException($"Bu şirkette SKU zaten kullanılıyor: {request.Code}");
+        }
+
+        var body = SysmondProductMapper.ToStockUpdateDto(request, company.Id, sysmondStockId);
+        if (body.MeasureUnitId is null || body.MeasureUnitId == Guid.Empty)
+            body.MeasureUnitId = product.MeasureUnitId;
+
+        await _stockCommand.UpdateStockAsync(accessToken, body, cancellationToken);
+
+        SysmondProductMapper.ApplyUpdateFromRequest(product, request);
+        _productRepository.Update(product);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ProductMapper.ToResponse(product);
+    }
+
     private static void EnsureSyncArgs(Guid sysmondCompanyId, string accessToken)
     {
         if (sysmondCompanyId == Guid.Empty)

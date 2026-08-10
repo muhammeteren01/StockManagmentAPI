@@ -10,4 +10,10 @@ public interface ISysmondStockCommandService
         string accessToken,
         SysmondStockCreateDto body,
         CancellationToken cancellationToken = default);
+
+    /// <summary><c>PUT /api/app/stock</c>.</summary>
+    Task UpdateStockAsync(
+        string accessToken,
+        SysmondStockUpdateDto body,
+        CancellationToken cancellationToken = default);
 }

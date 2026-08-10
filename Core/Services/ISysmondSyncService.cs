@@ -39,4 +39,15 @@ public interface ISysmondSyncService
         string accessToken,
         SysmondCreateStockRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sysmondax <c>PUT /api/app/stock</c> + yerel Product güncelleme.
+    /// <paramref name="sysmondStockId"/> = Product.ExternalSysmondId.
+    /// </summary>
+    Task<ProductResponse> UpdateStockAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondStockId,
+        SysmondUpdateStockRequest request,
+        CancellationToken cancellationToken = default);
 }
