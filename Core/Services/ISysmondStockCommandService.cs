@@ -16,4 +16,10 @@ public interface ISysmondStockCommandService
         string accessToken,
         SysmondStockUpdateDto body,
         CancellationToken cancellationToken = default);
+
+    /// <summary><c>DELETE /api/app/stock/{id}</c>.</summary>
+    Task DeleteStockAsync(
+        string accessToken,
+        Guid sysmondStockId,
+        CancellationToken cancellationToken = default);
 }

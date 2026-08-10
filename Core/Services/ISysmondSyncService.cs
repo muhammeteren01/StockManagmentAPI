@@ -50,4 +50,13 @@ public interface ISysmondSyncService
         Guid sysmondStockId,
         SysmondUpdateStockRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sysmondax <c>DELETE /api/app/stock/{id}</c> + yerel Product/Inventory silme.
+    /// </summary>
+    Task DeleteStockAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondStockId,
+        CancellationToken cancellationToken = default);
 }

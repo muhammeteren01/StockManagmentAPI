@@ -580,6 +580,48 @@ public class SysmondSyncService : ISysmondSyncService
         return ProductMapper.ToResponse(product);
     }
 
+    /// <inheritdoc />
+    public async Task DeleteStockAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondStockId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureSyncArgs(sysmondCompanyId, accessToken);
+
+        if (sysmondStockId == Guid.Empty)
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure("id", "Sysmond stock id zorunludur.")
+            ]);
+        }
+
+        var company = await _companyRepository.GetByIdAsync(sysmondCompanyId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Company bulunamadı (Sysmond CompanyId={sysmondCompanyId}).");
+
+        var product = await _productRepository.GetByExternalSysmondIdAsync(sysmondStockId, cancellationToken);
+        if (product is not null && product.CompanyId != company.Id)
+            throw new InvalidOperationException("Product farklı şirkete ait.");
+
+        await _stockCommand.DeleteStockAsync(accessToken, sysmondStockId, cancellationToken);
+
+        if (product is null)
+        {
+            _logger.LogInformation(
+                "Sysmond stock silindi; yerel Product yok ExternalSysmondId={ExternalSysmondId}",
+                sysmondStockId);
+            return;
+        }
+
+        var inventories = await _inventoryRepository.GetByProductIdAsync(product.Id, cancellationToken);
+        foreach (var inventory in inventories)
+            _inventoryRepository.Remove(inventory);
+
+        _productRepository.Remove(product);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     private static void EnsureSyncArgs(Guid sysmondCompanyId, string accessToken)
     {
         if (sysmondCompanyId == Guid.Empty)

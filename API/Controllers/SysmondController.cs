@@ -99,6 +99,21 @@ public class SysmondController : ControllerBase
         return Ok(updated);
     }
 
+    /// <summary>
+    /// Sysmondax stok siler (DELETE /api/app/stock/{id}) ve yerel Product + Inventory'yi kaldırır.
+    /// id = Sysmond stock id (ExternalSysmondId). Örnek: DELETE /api/sysmond/stocks/{id}?companyId={guid}
+    /// </summary>
+    [HttpDelete("stocks/{id:guid}")]
+    public async Task<IActionResult> DeleteStock(
+        Guid id,
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        await _syncService.DeleteStockAsync(cid, token, id, cancellationToken);
+        return NoContent();
+    }
+
     private (Guid CompanyId, string AccessToken) RequireCompanyAndBearer(Guid companyId)
     {
         if (companyId == Guid.Empty)
