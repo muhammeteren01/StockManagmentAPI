@@ -68,6 +68,22 @@ public class SysmondController : ControllerBase
     }
 
     /// <summary>
+    /// İrsaliye (despatch-query) → StockTransaction upsert + Inventory delta.
+    /// Taslak dahil tüm durumlar çekilir; orphan silme şimdilik kapalı.
+    /// Incoming → In, Outgoing → Out. Product/Warehouse ExternalSysmondId gerekir.
+    /// Örnek: POST /api/sysmond/sync/despatches?companyId={sysmondCompanyGuid}
+    /// </summary>
+    [HttpPost("sync/despatches")]
+    public async Task<IActionResult> SyncDespatches(
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var result = await _syncService.SyncDespatchesAsync(cid, token, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Sysmondax'a stok oluşturur (POST /api/app/stock) ve yerel Product (+ openingQuantity → Inventory) yazar.
     /// Örnek: POST /api/sysmond/stocks?companyId={guid}
     /// openingQuantity: [{ warehouseId, quantity }] — ilgili depoya açılış adedi.

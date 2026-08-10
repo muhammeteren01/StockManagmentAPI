@@ -1,6 +1,7 @@
 using Core.DTOs.Products;
 using Core.DTOs.Sysmond;
 using Core.Entities;
+using Core.Enums;
 using Core.Mappings;
 using Core.Repositories;
 using Core.Services;
@@ -12,44 +13,55 @@ using Microsoft.Extensions.Logging;
 namespace Service.Services.Sysmond;
 
 /// <summary>
-/// Manuel Sysmond ürün + inventory senkronu.
+/// Manuel Sysmond ürün + inventory + irsaliye senkronu.
 /// accessToken: istemcinin Authorization Bearer'ından gelen Sysmondax token.
 /// Company: Sysmond companyId → yerel Company.Id.
 /// Product orphan: ExternalSysmondId dolu ama remote stock-query'de yoksa silinir.
 /// Inventory: miktar kaynağı stock/balance.rem; depolar warehouse listesi + ExternalSysmondId.
 /// Inventory orphan: Sysmond-linked (ExternalSysmondId veya Product+Warehouse ExternalSysmondId)
 /// ve remote (stockId, warehouseId) set'te yoksa silinir.
+/// Despatch: kalemler StockTransaction (ExternalSysmondId = item.id); Inventory delta.
+/// Despatch orphan silme şimdilik kapalı (durum/filtre yüzünden yanlış silmeyi önlemek için).
 /// </summary>
 public class SysmondSyncService : ISysmondSyncService
 {
     private readonly ISysmondStockQueryService _stockQuery;
     private readonly ISysmondInventoryQueryService _inventoryQuery;
+    private readonly ISysmondDespatchQueryService _despatchQuery;
     private readonly ISysmondStockCommandService _stockCommand;
     private readonly IProductRepository _productRepository;
     private readonly ICompanyRepository _companyRepository;
     private readonly IWarehouseRepository _warehouseRepository;
     private readonly IInventoryRepository _inventoryRepository;
+    private readonly IStockTransactionRepository _stockTransactionRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SysmondSyncService> _logger;
 
     public SysmondSyncService(
         ISysmondStockQueryService stockQuery,
         ISysmondInventoryQueryService inventoryQuery,
+        ISysmondDespatchQueryService despatchQuery,
         ISysmondStockCommandService stockCommand,
         IProductRepository productRepository,
         ICompanyRepository companyRepository,
         IWarehouseRepository warehouseRepository,
         IInventoryRepository inventoryRepository,
+        IStockTransactionRepository stockTransactionRepository,
+        IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         ILogger<SysmondSyncService> logger)
     {
         _stockQuery = stockQuery;
         _inventoryQuery = inventoryQuery;
+        _despatchQuery = despatchQuery;
         _stockCommand = stockCommand;
         _productRepository = productRepository;
         _companyRepository = companyRepository;
         _warehouseRepository = warehouseRepository;
         _inventoryRepository = inventoryRepository;
+        _stockTransactionRepository = stockTransactionRepository;
+        _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -431,6 +443,243 @@ public class SysmondSyncService : ISysmondSyncService
     }
 
     /// <inheritdoc />
+    public async Task<SysmondDespatchSyncResult> SyncDespatchesAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureSyncArgs(sysmondCompanyId, accessToken);
+
+        var errors = new List<string>();
+        var result = new SysmondDespatchSyncResult();
+
+        var company = await _companyRepository.GetByIdAsync(sysmondCompanyId, cancellationToken);
+        if (company is null)
+        {
+            result.SkippedCompanyNotFound++;
+            result.Failed++;
+            result.Errors = [$"Company bulunamadı (Sysmond CompanyId={sysmondCompanyId})."];
+            return result;
+        }
+
+        var users = await _userRepository.GetByCompanyIdAsync(company.Id, cancellationToken);
+        var syncUser = users.FirstOrDefault();
+        if (syncUser is null)
+        {
+            result.SkippedNoUser++;
+            result.Failed++;
+            result.Errors =
+            [
+                $"Şirkette User yok; StockTransaction.UserId zorunlu (CompanyId={company.Id})."
+            ];
+            return result;
+        }
+
+        // CompanyPeriodId gönderilmez: dönem filtresi giden/gelen irsaliyeleri düşürebilir.
+        // Taslak + onaylı + tüm dönemler CompanyId ile gelir.
+        IReadOnlyList<SysmondDespatchDto> despatches;
+        try
+        {
+            despatches = await _despatchQuery.GetDespatchesAsync(
+                accessToken, company.Id, companyPeriodId: null, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            result.Failed++;
+            result.Errors = [$"despatch-query başarısız: {ex.Message}", .. errors];
+            _logger.LogWarning(ex, "Sysmond despatch-query başarısız: {CompanyId}", sysmondCompanyId);
+            return result;
+        }
+
+        result.DespatchesFetched = despatches.Count;
+        var remoteItemIds = new HashSet<Guid>();
+        // Aynı Product+Warehouse için tek Inventory instance; DbSet.Update + RowVersion 409 tetiklemesin.
+        var inventoryCache = new Dictionary<(Guid ProductId, Guid WarehouseId), Inventory>();
+        var placeholderProduct = await GetOrCreatePlaceholderProductAsync(company.Id, cancellationToken);
+        var placeholderWarehouse = await GetOrCreatePlaceholderWarehouseAsync(company.Id, cancellationToken);
+
+        foreach (var header in despatches)
+        {
+            IReadOnlyList<SysmondDespatchItemDto> items;
+            try
+            {
+                items = await _despatchQuery.GetDespatchItemsAsync(accessToken, header.Id, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                errors.Add($"DespatchId={header.Id} items: {ex.Message}");
+                _logger.LogWarning(ex, "Sysmond despatch-items başarısız: {DespatchId}", header.Id);
+                continue;
+            }
+
+            result.ItemsFetched += items.Count;
+
+            int direction;
+            try
+            {
+                _ = SysmondDespatchMapper.MapTransactionType(header.Direction);
+                direction = header.Direction;
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                errors.Add($"DespatchId={header.Id}, DocNo={header.DocNo ?? "-"}: {ex.Message}");
+                continue;
+            }
+
+            if (items.Count == 0)
+            {
+                // Kalemsiz irsaliye: placeholder satır (Inventory etkilenmez).
+                remoteItemIds.Add(header.Id);
+                var emptyItem = new SysmondDespatchItemDto
+                {
+                    Id = header.Id,
+                    DespatchId = header.Id,
+                    Name = header.DocNo,
+                    Quantity = 0
+                };
+                await UpsertDespatchLineAsync(
+                    header,
+                    emptyItem,
+                    direction,
+                    quantity: 0,
+                    product: placeholderProduct,
+                    warehouse: placeholderWarehouse,
+                    syncUser.Id,
+                    company.Id,
+                    applyInventory: false,
+                    incompleteNotes: "kalem yok | stok yok | depo yok",
+                    inventoryCache,
+                    result,
+                    errors,
+                    cancellationToken);
+                continue;
+            }
+
+            // Artık kalem var: eski header-stub'ı kaldır (Inventory yoktu).
+            var headerStub = await _stockTransactionRepository.GetByExternalSysmondIdAsync(
+                header.Id, cancellationToken);
+            if (headerStub is not null && headerStub.CompanyId == company.Id)
+            {
+                _stockTransactionRepository.Remove(headerStub);
+                result.Deleted++;
+            }
+
+            foreach (var item in items)
+            {
+                try
+                {
+                    if (item.Id == Guid.Empty)
+                    {
+                        result.SkippedInvalidItem++;
+                        errors.Add(
+                            $"DocNo={header.DocNo ?? "-"}, DespatchId={header.Id}: item.id boş.");
+                        continue;
+                    }
+
+                    remoteItemIds.Add(item.Id);
+
+                    var missingStock = item.StockId is null || item.StockId == Guid.Empty;
+                    var missingWarehouse = item.WarehouseId is null || item.WarehouseId == Guid.Empty;
+                    var quantity = SysmondDespatchMapper.MapQuantity(item.Quantity);
+
+                    Product product;
+                    if (missingStock)
+                    {
+                        product = placeholderProduct;
+                    }
+                    else
+                    {
+                        var found = await _productRepository.GetByExternalSysmondIdAsync(
+                            item.StockId!.Value, cancellationToken);
+                        if (found is null || found.CompanyId != company.Id)
+                        {
+                            result.SkippedProductNotFound++;
+                            errors.Add(
+                                $"DocNo={header.DocNo ?? "-"}, ItemId={item.Id}: Product bulunamadı (StockId={item.StockId}).");
+                            continue;
+                        }
+
+                        product = found;
+                    }
+
+                    Warehouse warehouse;
+                    if (missingWarehouse)
+                    {
+                        warehouse = placeholderWarehouse;
+                    }
+                    else
+                    {
+                        var foundWh = await _warehouseRepository.GetByExternalSysmondIdAsync(
+                            item.WarehouseId!.Value, cancellationToken);
+                        if (foundWh is null || foundWh.CompanyId != company.Id)
+                        {
+                            result.SkippedWarehouseNotFound++;
+                            errors.Add(
+                                $"DocNo={header.DocNo ?? "-"}, ItemId={item.Id}: Warehouse bulunamadı (WarehouseId={item.WarehouseId}).");
+                            continue;
+                        }
+
+                        warehouse = foundWh;
+                    }
+
+                    var incompleteParts = new List<string>();
+                    if (missingStock)
+                        incompleteParts.Add("stok yok");
+                    if (missingWarehouse)
+                        incompleteParts.Add("depo yok");
+                    if (quantity == 0)
+                        incompleteParts.Add("miktar 0");
+
+                    var isIncomplete = incompleteParts.Count > 0;
+                    var applyInventory = !isIncomplete
+                        && !IsPlaceholderProduct(product)
+                        && !IsPlaceholderWarehouse(warehouse)
+                        && quantity > 0;
+
+                    await UpsertDespatchLineAsync(
+                        header,
+                        item,
+                        direction,
+                        quantity,
+                        product,
+                        warehouse,
+                        syncUser.Id,
+                        company.Id,
+                        applyInventory,
+                        isIncomplete ? string.Join(" | ", incompleteParts) : null,
+                        inventoryCache,
+                        result,
+                        errors,
+                        cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    result.Failed++;
+                    errors.Add($"DespatchId={header.Id}, ItemId={item.Id}: {ex.Message}");
+                    _logger.LogWarning(
+                        ex,
+                        "Sysmond despatch senkron satırı başarısız: DespatchId={DespatchId}, ItemId={ItemId}",
+                        header.Id,
+                        item.Id);
+                }
+            }
+        }
+
+        // Orphan delete şimdilik kapalı: filtre/durum (taslak vb.) yüzünden remote'da
+        // görünmeyen kalemler yerel StockTransaction'ı silmesin.
+        // Sysmond'ta gerçek silme senkronu ayrıca açılacak.
+        _logger.LogInformation(
+            "Sysmond despatch sync orphan delete atlandı (disabled). RemoteItemIds={Count}",
+            remoteItemIds.Count);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        result.Errors = errors;
+        return result;
+    }
+
+    /// <inheritdoc />
     public async Task<ProductResponse> CreateStockAsync(
         Guid sysmondCompanyId,
         string accessToken,
@@ -789,4 +1038,280 @@ public class SysmondSyncService : ISysmondSyncService
             result.OpeningsApplied++;
         }
     }
+
+    private async Task DeleteDespatchTransactionsMissingFromRemoteAsync(
+        Guid companyId,
+        HashSet<Guid> remoteItemIds,
+        SysmondDespatchSyncResult result,
+        List<string> errors,
+        CancellationToken cancellationToken)
+    {
+        var local = await _stockTransactionRepository.GetByCompanyIdAsync(companyId, cancellationToken);
+        var orphans = local
+            .Where(t => t.ExternalSysmondId is Guid extId && !remoteItemIds.Contains(extId))
+            .ToList();
+
+        foreach (var orphan in orphans)
+        {
+            try
+            {
+                var entity = await _stockTransactionRepository.GetByIdAsync(orphan.Id, cancellationToken);
+                if (entity is null)
+                    continue;
+
+                var inventory = await GetOrCreateInventoryAsync(
+                    entity.CompanyId, entity.ProductId, entity.WarehouseId, cancellationToken);
+                ApplyQuantityChange(inventory, ReverseType(entity.TransactionType), entity.Quantity);
+                inventory.LastUpdated = DateTime.UtcNow;
+                _inventoryRepository.Update(inventory);
+
+                _stockTransactionRepository.Remove(entity);
+                result.Deleted++;
+            }
+            catch (Exception ex)
+            {
+                result.FailedDeletes++;
+                errors.Add(
+                    $"Delete ExternalSysmondId={orphan.ExternalSysmondId}, TxId={orphan.Id}: {ex.Message}");
+                _logger.LogWarning(
+                    ex,
+                    "Sysmond senkron orphan despatch hareketi silinemedi: {TxId}, ExternalSysmondId={ExternalSysmondId}",
+                    orphan.Id,
+                    orphan.ExternalSysmondId);
+            }
+        }
+    }
+
+    private async Task UpsertDespatchLineAsync(
+        SysmondDespatchDto header,
+        SysmondDespatchItemDto item,
+        int direction,
+        int quantity,
+        Product product,
+        Warehouse warehouse,
+        Guid userId,
+        Guid companyId,
+        bool applyInventory,
+        string? incompleteNotes,
+        Dictionary<(Guid ProductId, Guid WarehouseId), Inventory> inventoryCache,
+        SysmondDespatchSyncResult result,
+        List<string> errors,
+        CancellationToken cancellationToken)
+    {
+        var existing = await _stockTransactionRepository.GetByExternalSysmondIdAsync(
+            item.Id, cancellationToken);
+
+        if (existing is null)
+        {
+            var created = SysmondDespatchMapper.ToNewTransaction(
+                header, item, companyId, product.Id, warehouse.Id, userId);
+            created.Quantity = quantity;
+            created.Notes = AppendIncompleteNotes(created.Notes, incompleteNotes);
+
+            if (applyInventory && quantity > 0)
+            {
+                var inventory = await GetOrCreateInventoryCachedAsync(
+                    inventoryCache, companyId, product.Id, warehouse.Id, cancellationToken);
+                ApplyQuantityChange(inventory, created.TransactionType, created.Quantity);
+                inventory.LastUpdated = DateTime.UtcNow;
+            }
+
+            await _stockTransactionRepository.AddAsync(created, cancellationToken);
+            result.Created++;
+            return;
+        }
+
+        if (existing.CompanyId != companyId)
+        {
+            result.Failed++;
+            errors.Add(
+                $"StockTransaction ExternalSysmondId başka şirkette (ItemId={item.Id}, LocalCompany={existing.CompanyId}).");
+            return;
+        }
+
+        var oldType = existing.TransactionType;
+        var oldQty = existing.Quantity;
+        var oldProductId = existing.ProductId;
+        var oldWarehouseId = existing.WarehouseId;
+        var newType = SysmondDespatchMapper.MapTransactionType(direction);
+
+        var movementChanged =
+            oldType != newType
+            || oldQty != quantity
+            || oldProductId != product.Id
+            || oldWarehouseId != warehouse.Id;
+
+        if (movementChanged)
+        {
+            if (oldQty > 0 && await WasInventoryAffectingAsync(oldProductId, oldWarehouseId, cancellationToken))
+            {
+                var oldInventory = await GetOrCreateInventoryCachedAsync(
+                    inventoryCache, companyId, oldProductId, oldWarehouseId, cancellationToken);
+                ApplyQuantityChange(oldInventory, ReverseType(oldType), oldQty);
+                oldInventory.LastUpdated = DateTime.UtcNow;
+            }
+
+            if (applyInventory && quantity > 0)
+            {
+                var newInventory = await GetOrCreateInventoryCachedAsync(
+                    inventoryCache, companyId, product.Id, warehouse.Id, cancellationToken);
+                ApplyQuantityChange(newInventory, newType, quantity);
+                newInventory.LastUpdated = DateTime.UtcNow;
+            }
+        }
+
+        SysmondDespatchMapper.ApplyToTransaction(existing, header, item, product.Id, warehouse.Id);
+        existing.Quantity = quantity;
+        existing.Notes = AppendIncompleteNotes(
+            SysmondDespatchMapper.BuildNotes(header, item), incompleteNotes);
+        result.Updated++;
+    }
+
+    /// <summary>Eski satır placeholder ürün/depo ise Inventory reverse yok.</summary>
+    private async Task<bool> WasInventoryAffectingAsync(
+        Guid productId,
+        Guid warehouseId,
+        CancellationToken cancellationToken)
+    {
+        var product = await _productRepository.GetByIdAsync(productId, cancellationToken);
+        if (product is null || IsPlaceholderProduct(product))
+            return false;
+        var warehouse = await _warehouseRepository.GetByIdAsync(warehouseId, cancellationToken);
+        return warehouse is not null && !IsPlaceholderWarehouse(warehouse);
+    }
+
+    private const string PlaceholderProductSku = "__SYSMOND_NO_STOCK__";
+    private const string PlaceholderWarehouseName = "Sysmond depo yok";
+
+    private static bool IsPlaceholderProduct(Product product) =>
+        string.Equals(product.Sku, PlaceholderProductSku, StringComparison.Ordinal);
+
+    private static bool IsPlaceholderWarehouse(Warehouse warehouse) =>
+        string.Equals(warehouse.Name, PlaceholderWarehouseName, StringComparison.Ordinal);
+
+    private static string? AppendIncompleteNotes(string? notes, string? incompleteNotes)
+    {
+        if (string.IsNullOrWhiteSpace(incompleteNotes))
+            return notes;
+        if (string.IsNullOrWhiteSpace(notes))
+            return incompleteNotes;
+        if (notes.Contains(incompleteNotes, StringComparison.OrdinalIgnoreCase))
+            return notes;
+        return $"{notes} | {incompleteNotes}";
+    }
+
+    private async Task<Product> GetOrCreatePlaceholderProductAsync(
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        var existing = await _productRepository.GetBySkuAsync(companyId, PlaceholderProductSku, cancellationToken);
+        if (existing is not null)
+            return existing;
+
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            Sku = PlaceholderProductSku,
+            Name = "Sysmond stok yok",
+            Description = "Sysmond irsaliye kaleminde StockId yok / atanmamış.",
+            Type = ProductType.Goods,
+            Status = ProductStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _productRepository.AddAsync(product, cancellationToken);
+        return product;
+    }
+
+    private async Task<Warehouse> GetOrCreatePlaceholderWarehouseAsync(
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        var list = await _warehouseRepository.GetByCompanyIdAsync(companyId, cancellationToken);
+        var existing = list.FirstOrDefault(IsPlaceholderWarehouse);
+        if (existing is not null)
+            return existing;
+
+        var warehouse = new Warehouse
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            Name = PlaceholderWarehouseName,
+            Location = "placeholder",
+            IsActive = true
+        };
+        await _warehouseRepository.AddAsync(warehouse, cancellationToken);
+        return warehouse;
+    }
+
+    private async Task<Inventory> GetOrCreateInventoryAsync(
+        Guid companyId,
+        Guid productId,
+        Guid warehouseId,
+        CancellationToken cancellationToken)
+    {
+        var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(
+            productId, warehouseId, cancellationToken);
+        if (inventory is not null)
+            return inventory;
+
+        inventory = new Inventory
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            ProductId = productId,
+            WarehouseId = warehouseId,
+            Quantity = 0,
+            LastUpdated = DateTime.UtcNow
+        };
+        await _inventoryRepository.AddAsync(inventory, cancellationToken);
+        return inventory;
+    }
+
+    /// <summary>
+    /// Despatch sync: aynı Product+Warehouse için tek tracked Inventory.
+    /// DbSet.Update çağrılmaz (RowVersion ile 409); change tracker property değişimini izler.
+    /// </summary>
+    private async Task<Inventory> GetOrCreateInventoryCachedAsync(
+        Dictionary<(Guid ProductId, Guid WarehouseId), Inventory> cache,
+        Guid companyId,
+        Guid productId,
+        Guid warehouseId,
+        CancellationToken cancellationToken)
+    {
+        var key = (productId, warehouseId);
+        if (cache.TryGetValue(key, out var cached))
+            return cached;
+
+        var inventory = await GetOrCreateInventoryAsync(companyId, productId, warehouseId, cancellationToken);
+        cache[key] = inventory;
+        return inventory;
+    }
+
+    /// <summary>StockTransactionService ile aynı delta mantığı.</summary>
+    private static void ApplyQuantityChange(Inventory inventory, TransactionType type, int quantity)
+    {
+        var delta = type switch
+        {
+            TransactionType.In or TransactionType.TransferIn => quantity,
+            TransactionType.Out or TransactionType.TransferOut or TransactionType.Adjustment => -quantity,
+            _ => throw new InvalidOperationException($"Desteklenmeyen hareket tipi: {type}")
+        };
+
+        if (inventory.Quantity + delta < 0)
+            throw new InvalidOperationException("Yetersiz stok.");
+
+        inventory.Quantity += delta;
+    }
+
+    /// <summary>Mevcut hareketi geri almak için zıt tip (In↔Out).</summary>
+    private static TransactionType ReverseType(TransactionType type) =>
+        type switch
+        {
+            TransactionType.In => TransactionType.Out,
+            TransactionType.Out => TransactionType.In,
+            TransactionType.TransferIn => TransactionType.TransferOut,
+            TransactionType.TransferOut => TransactionType.TransferIn,
+            _ => throw new InvalidOperationException($"Geri alınamayan hareket tipi: {type}")
+        };
 }

@@ -363,6 +363,14 @@ namespace Repository.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("company_id");
 
+                    b.Property<Guid?>("ExternalSysmondDespatchId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("external_sysmond_despatch_id");
+
+                    b.Property<Guid?>("ExternalSysmondId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("external_sysmond_id");
+
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("notes");
@@ -414,6 +422,12 @@ namespace Repository.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId");
+
+                    b.HasIndex("ExternalSysmondDespatchId");
+
+                    b.HasIndex("ExternalSysmondId")
+                        .IsUnique()
+                        .HasFilter("[external_sysmond_id] IS NOT NULL");
 
                     b.HasIndex("ProductId");
 

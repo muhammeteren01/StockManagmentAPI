@@ -21,6 +21,12 @@ public class StockTransaction
     /// <summary>Mal alımından (PO) kaynaklıysa referans</summary>
     public Guid? PurchaseOrderId { get; set; }
 
+    /// <summary>Sysmond despatch-item.id — upsert anahtarı.</summary>
+    public Guid? ExternalSysmondId { get; set; }
+
+    /// <summary>Sysmond despatch.id — header gruplama.</summary>
+    public Guid? ExternalSysmondDespatchId { get; set; }
+
     /// <summary>Hareket türü. DB'ye string olarak yazılır (DbContext'te HasConversion ile).</summary>
     public TransactionType TransactionType { get; set; }
 

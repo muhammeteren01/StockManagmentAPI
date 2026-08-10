@@ -32,6 +32,15 @@ public interface ISysmondSyncService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Despatch-query (irsaliye) → StockTransaction upsert + Inventory delta (orphan silme kapalı).
+    /// Product/Warehouse ExternalSysmondId ile eşlenir. Outbound create yok.
+    /// </summary>
+    Task<SysmondDespatchSyncResult> SyncDespatchesAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Sysmondax <c>POST /api/app/stock</c> + yerel Product (ve openingQuantity → Inventory).
     /// </summary>
     Task<ProductResponse> CreateStockAsync(

@@ -27,4 +27,21 @@ public class StockTransactionRepository : GenericRepository<StockTransaction>, I
             .OrderByDescending(x => x.TransactionDate)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<StockTransaction>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        return await DbSet.AsNoTracking()
+            .Where(x => x.CompanyId == companyId)
+            .OrderByDescending(x => x.TransactionDate)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<StockTransaction?> GetByExternalSysmondIdAsync(
+        Guid externalSysmondId,
+        CancellationToken cancellationToken = default)
+    {
+        return await DbSet.FirstOrDefaultAsync(
+            x => x.ExternalSysmondId == externalSysmondId,
+            cancellationToken);
+    }
 }

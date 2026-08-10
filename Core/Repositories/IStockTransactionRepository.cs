@@ -7,4 +7,6 @@ public interface IStockTransactionRepository : IGenericRepository<StockTransacti
 {
     Task<IReadOnlyList<StockTransaction>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StockTransaction>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<StockTransaction>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default);
+    Task<StockTransaction?> GetByExternalSysmondIdAsync(Guid externalSysmondId, CancellationToken cancellationToken = default);
 }
