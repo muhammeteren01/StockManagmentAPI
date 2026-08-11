@@ -1,6 +1,6 @@
 namespace Core.DTOs.Sysmond;
 
-/// <summary>Manuel irsaliye (despatch) → StockTransaction senkron sonucu.</summary>
+/// <summary>Manuel irsaliye (despatch) → PurchaseOrder belge senkron sonucu.</summary>
 public class SysmondDespatchSyncResult
 {
     /// <summary>Remote despatch header sayısı.</summary>
@@ -12,7 +12,7 @@ public class SysmondDespatchSyncResult
     public int Created { get; set; }
     public int Updated { get; set; }
 
-    /// <summary>Remote set'te olmayan ExternalSysmondId'li yerel hareket silinen sayısı.</summary>
+    /// <summary>Remote set'te olmayan ExternalSysmondId'li yerel belge silinen sayısı.</summary>
     public int Deleted { get; set; }
 
     public int Failed { get; set; }

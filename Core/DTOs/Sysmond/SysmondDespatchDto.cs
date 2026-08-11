@@ -18,4 +18,10 @@ public class SysmondDespatchDto
     public string? Description { get; set; }
     public string? ActName { get; set; }
     public string? ActVknTckn { get; set; }
+
+    /// <summary>Şirket adresi (Sysmond companyAddressId).</summary>
+    public Guid? CompanyAddressId { get; set; }
+
+    /// <summary>Teslim adresi kaydı (Sysmond deliveryAddressId); doluysa detail endpoint çağrılır.</summary>
+    public Guid? DeliveryAddressId { get; set; }
 }

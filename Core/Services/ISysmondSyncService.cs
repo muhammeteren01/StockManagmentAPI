@@ -32,7 +32,8 @@ public interface ISysmondSyncService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Despatch-query (irsaliye) → StockTransaction upsert + dönem-scoped orphan silme + Inventory delta.
+    /// Despatch-query → PurchaseOrder + Item upsert; dönem-scoped orphan (stok hareketi yok).
+    /// companyAddressId + adres JSON: teslimat → cari (despatch-party) → şirket adresi.
     /// Product/Warehouse ExternalSysmondId ile eşlenir. Outbound create yok.
     /// </summary>
     Task<SysmondDespatchSyncResult> SyncDespatchesAsync(

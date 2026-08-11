@@ -115,6 +115,150 @@ public class SysmondDespatchQueryService : ISysmondDespatchQueryService
         return items;
     }
 
+    /// <inheritdoc />
+    public async Task<SysmondDespatchDeliveryAddressDto?> GetDespatchDeliveryAddressAsync(
+        string accessToken,
+        Guid despatchId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        if (despatchId == Guid.Empty)
+            throw new ArgumentException("despatchId zorunludur.", nameof(despatchId));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var url = $"api/app/despatch-query/{despatchId}/despatch-delivery-address";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound
+            || IsDeliveryAddressMissing(response.StatusCode, body))
+        {
+            _logger.LogInformation(
+                "Sysmond despatch-delivery-address yok: DespatchId={DespatchId}, Status={Status}",
+                despatchId,
+                (int)response.StatusCode);
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond despatch-delivery-address başarısız ({(int)response.StatusCode}): {Truncate(body, 500)}");
+        }
+
+        var parsed = JsonSerializer.Deserialize<SysmondDespatchDeliveryAddressResult>(body, JsonOptions);
+        var data = parsed?.Data;
+        _logger.LogInformation(
+            "Sysmond despatch-delivery-address: DespatchId={DespatchId}, HasAddress={HasAddress}, AddressId={AddressId}",
+            despatchId,
+            data is not null,
+            data?.Id);
+        return data;
+    }
+
+    /// <inheritdoc />
+    public async Task<SysmondCompanyAddressDto?> GetCompanyAddressByIdAsync(
+        string accessToken,
+        Guid companyAddressId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        if (companyAddressId == Guid.Empty)
+            throw new ArgumentException("companyAddressId zorunludur.", nameof(companyAddressId));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var url = $"api/app/company-address/{companyAddressId}/address-by-id";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound
+            || IsAddressNotFoundBusinessError(response.StatusCode, body))
+        {
+            _logger.LogInformation(
+                "Sysmond company-address yok: AddressId={AddressId}, Status={Status}",
+                companyAddressId,
+                (int)response.StatusCode);
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond company-address başarısız ({(int)response.StatusCode}): {Truncate(body, 500)}");
+        }
+
+        var parsed = JsonSerializer.Deserialize<SysmondCompanyAddressResult>(body, JsonOptions);
+        var data = parsed?.Data;
+        _logger.LogInformation(
+            "Sysmond company-address: AddressId={AddressId}, HasAddress={HasAddress}, Street={Street}",
+            companyAddressId,
+            data is not null,
+            data?.Street);
+        return data;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SysmondDespatchPartyDto>> GetDespatchPartiesAsync(
+        string accessToken,
+        Guid companyId,
+        Guid despatchId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        if (companyId == Guid.Empty)
+            throw new ArgumentException("companyId zorunludur.", nameof(companyId));
+        if (despatchId == Guid.Empty)
+            throw new ArgumentException("despatchId zorunludur.", nameof(despatchId));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var url = $"api/app/despatch-party?companyId={companyId}&despatchId={despatchId}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond despatch-party başarısız ({(int)response.StatusCode}): {Truncate(body, 500)}");
+        }
+
+        var parsed = JsonSerializer.Deserialize<SysmondDespatchPartyListResult>(body, JsonOptions);
+        var items = parsed?.Data ?? Array.Empty<SysmondDespatchPartyDto>();
+        _logger.LogInformation(
+            "Sysmond despatch-party: DespatchId={DespatchId}, Count={Count}",
+            despatchId,
+            items.Count);
+        return items;
+    }
+
+    /// <summary>
+    /// Sysmond çoğu “bulunamadı” iş kuralını 403 + <c>Sysmond.Error:50001</c> ile döner (HTTP 404 değil).
+    /// </summary>
+    private static bool IsDeliveryAddressMissing(System.Net.HttpStatusCode statusCode, string body)
+        => IsAddressNotFoundBusinessError(statusCode, body)
+           || (statusCode == System.Net.HttpStatusCode.Forbidden
+               && body.Contains("teslimat adresi bulunamadı", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsAddressNotFoundBusinessError(System.Net.HttpStatusCode statusCode, string body)
+    {
+        if (statusCode != System.Net.HttpStatusCode.Forbidden)
+            return false;
+
+        return body.Contains("Sysmond.Error:50001", StringComparison.Ordinal)
+               || body.Contains("bulunamadı", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string BuildDespatchesUrl(
         int skipCount,
         int maxResultCount,

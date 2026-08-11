@@ -22,8 +22,8 @@ internal static class SysmondSyncServiceTestHelper
         Mock<IInventoryRepository> inventoryRepository,
         Mock<IUnitOfWork> unitOfWork,
         Mock<ISysmondDespatchQueryService>? despatchQuery = null,
-        Mock<IStockTransactionRepository>? stockTransactionRepository = null,
-        Mock<IUserRepository>? userRepository = null) =>
+        Mock<IUserRepository>? userRepository = null,
+        Mock<IPurchaseOrderRepository>? purchaseOrderRepository = null) =>
         new(
             stockQuery.Object,
             inventoryQuery.Object,
@@ -33,7 +33,7 @@ internal static class SysmondSyncServiceTestHelper
             companyRepository.Object,
             warehouseRepository.Object,
             inventoryRepository.Object,
-            (stockTransactionRepository ?? new Mock<IStockTransactionRepository>()).Object,
+            (purchaseOrderRepository ?? new Mock<IPurchaseOrderRepository>()).Object,
             (userRepository ?? new Mock<IUserRepository>()).Object,
             unitOfWork.Object,
             NullLogger<SysmondSyncService>.Instance);
@@ -80,21 +80,19 @@ internal static class SysmondSyncServiceTestHelper
     public static SysmondWarehouseDto CreateWarehouseDto(
         Guid companyId,
         Guid? id = null,
-        string name = "Ana Depo",
-        string? code = "WH-1") =>
+        string name = "Depo") =>
         new()
         {
             Id = id ?? Guid.NewGuid(),
             CompanyId = companyId,
             Name = name,
-            WarehouseCode = code,
             IsActive = true
         };
 
     public static SysmondStockBalanceDto CreateBalance(
         Guid stockId,
         Guid warehouseId,
-        double rem = 10) =>
+        double rem) =>
         new()
         {
             StockId = stockId,
@@ -108,17 +106,21 @@ internal static class SysmondSyncServiceTestHelper
         Guid? id = null,
         int direction = SysmondDespatchMapper.DirectionIncoming,
         string? docNo = "IRS-1",
-        Guid? companyPeriodId = null) =>
+        Guid? companyPeriodId = null,
+        Guid? companyAddressId = null,
+        Guid? deliveryAddressId = null) =>
         new()
         {
             Id = id ?? Guid.NewGuid(),
             Direction = direction,
-            Status = 20,
+            Status = 21,
             DocNo = docNo,
             CompanyPeriodId = companyPeriodId ?? Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
             IssueDate = DateTime.UtcNow.Date,
             ActName = "Test Cari",
-            ActVknTckn = "1234567890"
+            ActVknTckn = "1234567890",
+            CompanyAddressId = companyAddressId,
+            DeliveryAddressId = deliveryAddressId
         };
 
     public static SysmondDespatchItemDto CreateDespatchItem(
@@ -134,6 +136,7 @@ internal static class SysmondSyncServiceTestHelper
             StockId = stockId,
             WarehouseId = warehouseId,
             Quantity = quantity,
-            Name = "Kalem"
+            Name = "Kalem",
+            UnitPrice = 10
         };
 }

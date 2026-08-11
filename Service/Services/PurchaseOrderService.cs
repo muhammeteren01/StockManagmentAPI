@@ -100,6 +100,14 @@ public class PurchaseOrderService : IPurchaseOrderService
         if (order.Status is not (PurchaseOrderStatus.Approved or PurchaseOrderStatus.Received))
             throw new InvalidOperationException("Sadece Approved veya kısmen Received siparişlerde mal kabulü yapılabilir.");
 
+        if (order.DocumentType != PurchaseOrderDocumentType.PurchaseOrder)
+            throw new InvalidOperationException("Mal kabul yalnızca satın alma siparişleri için geçerlidir.");
+
+        if (order.WarehouseId is null || order.WarehouseId == Guid.Empty)
+            throw new InvalidOperationException("Mal kabul için depo zorunludur.");
+
+        var warehouseId = order.WarehouseId.Value;
+
         foreach (var item in order.Items)
         {
             if (!receivedQuantities.TryGetValue(item.ProductId, out var incoming) || incoming <= 0)
@@ -111,7 +119,7 @@ public class PurchaseOrderService : IPurchaseOrderService
 
             item.ReceivedQuantity += incoming;
 
-            var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(item.ProductId, order.WarehouseId, cancellationToken);
+            var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(item.ProductId, warehouseId, cancellationToken);
             if (inventory is null)
             {
                 inventory = new Inventory
@@ -119,7 +127,7 @@ public class PurchaseOrderService : IPurchaseOrderService
                     Id = Guid.NewGuid(),
                     CompanyId = order.CompanyId,
                     ProductId = item.ProductId,
-                    WarehouseId = order.WarehouseId,
+                    WarehouseId = warehouseId,
                     Quantity = 0,
                     LastUpdated = DateTime.UtcNow
                 };
@@ -134,7 +142,7 @@ public class PurchaseOrderService : IPurchaseOrderService
                 Id = Guid.NewGuid(),
                 CompanyId = order.CompanyId,
                 ProductId = item.ProductId,
-                WarehouseId = order.WarehouseId,
+                WarehouseId = warehouseId,
                 UserId = order.UserId,
                 PurchaseOrderId = order.Id,
                 TransactionType = TransactionType.In,

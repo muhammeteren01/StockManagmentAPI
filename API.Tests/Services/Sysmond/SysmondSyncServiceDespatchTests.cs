@@ -9,7 +9,7 @@ using Moq;
 
 namespace API.Tests.Services.Sysmond;
 
-/// <summary>SysmondSyncService.SyncDespatchesAsync birim smoke testleri.</summary>
+/// <summary>SysmondSyncService.SyncDespatchesAsync → PurchaseOrder belge senkronu.</summary>
 public class SysmondSyncServiceDespatchTests
 {
     private readonly Mock<ISysmondStockQueryService> _stockQuery = new();
@@ -19,7 +19,7 @@ public class SysmondSyncServiceDespatchTests
     private readonly Mock<ICompanyRepository> _companyRepository = new();
     private readonly Mock<IWarehouseRepository> _warehouseRepository = new();
     private readonly Mock<IInventoryRepository> _inventoryRepository = new();
-    private readonly Mock<IStockTransactionRepository> _txRepository = new();
+    private readonly Mock<IPurchaseOrderRepository> _poRepository = new();
     private readonly Mock<IUserRepository> _userRepository = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Service.Services.Sysmond.SysmondSyncService _sut;
@@ -39,8 +39,8 @@ public class SysmondSyncServiceDespatchTests
             _inventoryRepository,
             _unitOfWork,
             _despatchQuery,
-            _txRepository,
-            _userRepository);
+            _userRepository,
+            _poRepository);
 
         _inventoryQuery
             .Setup(s => s.GetMyCompanyPeriodsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -58,13 +58,21 @@ public class SysmondSyncServiceDespatchTests
         _productRepository
             .Setup(r => r.GetBySkuAsync(CompanyId, "__SYSMOND_NO_STOCK__", It.IsAny<CancellationToken>()))
             .ReturnsAsync((Product?)null);
-        _warehouseRepository
-            .Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<Warehouse>());
 
-        _txRepository
-            .Setup(r => r.GetByCompanyIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<StockTransaction>());
+        _poRepository
+            .Setup(r => r.GetSysmondDespatchesByCompanyPeriodAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<PurchaseOrder>());
+
+        _despatchQuery
+            .Setup(s => s.GetDespatchDeliveryAddressAsync(
+                It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SysmondDespatchDeliveryAddressDto?)null);
+
+        _despatchQuery
+            .Setup(s => s.GetDespatchPartiesAsync(
+                It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<SysmondDespatchPartyDto>());
     }
 
     [Fact]
@@ -78,7 +86,7 @@ public class SysmondSyncServiceDespatchTests
     }
 
     [Fact]
-    public async Task SyncDespatchesAsync_WhenIncomingItem_CreatesStockTransactionInAndIncrementsInventory()
+    public async Task SyncDespatchesAsync_WhenIncomingItem_CreatesPurchaseOrderAndItem()
     {
         var company = SysmondSyncServiceTestHelper.CreateCompany(CompanyId);
         var user = SysmondSyncServiceTestHelper.CreateUser(CompanyId);
@@ -104,7 +112,7 @@ public class SysmondSyncServiceDespatchTests
             Location = "A",
             IsActive = true
         };
-        var despatch = SysmondSyncServiceTestHelper.CreateDespatch();
+        var despatch = SysmondSyncServiceTestHelper.CreateDespatch(companyPeriodId: PeriodId);
         var item = SysmondSyncServiceTestHelper.CreateDespatchItem(despatch.Id, stockExt, whExt, quantity: 7);
 
         _companyRepository.Setup(r => r.GetByIdAsync(CompanyId, It.IsAny<CancellationToken>()))
@@ -119,19 +127,12 @@ public class SysmondSyncServiceDespatchTests
             .ReturnsAsync(product);
         _warehouseRepository.Setup(r => r.GetByExternalSysmondIdAsync(whExt, It.IsAny<CancellationToken>()))
             .ReturnsAsync(warehouse);
-        _txRepository.Setup(r => r.GetByExternalSysmondIdAsync(item.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((StockTransaction?)null);
-        _inventoryRepository.Setup(r => r.GetByProductAndWarehouseAsync(product.Id, warehouse.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Inventory?)null);
+        _poRepository.Setup(r => r.GetByExternalSysmondIdWithItemsAsync(despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((PurchaseOrder?)null);
 
-        StockTransaction? added = null;
-        _txRepository.Setup(r => r.AddAsync(It.IsAny<StockTransaction>(), It.IsAny<CancellationToken>()))
-            .Callback<StockTransaction, CancellationToken>((t, _) => added = t)
-            .Returns(Task.CompletedTask);
-
-        Inventory? addedInv = null;
-        _inventoryRepository.Setup(r => r.AddAsync(It.IsAny<Inventory>(), It.IsAny<CancellationToken>()))
-            .Callback<Inventory, CancellationToken>((inv, _) => addedInv = inv)
+        PurchaseOrder? added = null;
+        _poRepository.Setup(r => r.AddAsync(It.IsAny<PurchaseOrder>(), It.IsAny<CancellationToken>()))
+            .Callback<PurchaseOrder, CancellationToken>((o, _) => added = o)
             .Returns(Task.CompletedTask);
 
         var result = await _sut.SyncDespatchesAsync(CompanyId, AccessToken);
@@ -141,19 +142,21 @@ public class SysmondSyncServiceDespatchTests
         result.Created.Should().Be(1);
         result.Failed.Should().Be(0);
         added.Should().NotBeNull();
-        added!.TransactionType.Should().Be(TransactionType.In);
-        added.Quantity.Should().Be(7);
-        added.ExternalSysmondId.Should().Be(item.Id);
-        added.ExternalSysmondDespatchId.Should().Be(despatch.Id);
+        added!.DocumentType.Should().Be(PurchaseOrderDocumentType.IncomingDespatch);
+        added.Direction.Should().Be(DespatchDirection.Incoming);
+        added.ExternalSysmondId.Should().Be(despatch.Id);
         added.ExternalSysmondCompanyPeriodId.Should().Be(PeriodId);
-        added.ReferenceNo.Should().Be("IRS-1");
-        addedInv.Should().NotBeNull();
-        addedInv!.Quantity.Should().Be(7);
+        added.Status.Should().Be(PurchaseOrderStatus.Saved);
+        added.Items.Should().HaveCount(1);
+        added.Items.First().ProductId.Should().Be(product.Id);
+        added.Items.First().WarehouseId.Should().Be(warehouse.Id);
+        added.Items.First().Quantity.Should().Be(7);
+        added.TotalAmount.Should().Be(70);
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task SyncDespatchesAsync_WhenRemoteSubset_DeletesSamePeriodOrphanAndReversesInventory()
+    public async Task SyncDespatchesAsync_WhenRemoteSubset_DeletesSamePeriodOrphanOrder()
     {
         var company = SysmondSyncServiceTestHelper.CreateCompany(CompanyId);
         var user = SysmondSyncServiceTestHelper.CreateUser(CompanyId);
@@ -183,63 +186,31 @@ public class SysmondSyncServiceDespatchTests
         var remoteItem = SysmondSyncServiceTestHelper.CreateDespatchItem(
             remoteDespatch.Id, remoteStockExt, remoteWhExt, quantity: 1);
 
-        var orphanExt = Guid.NewGuid();
-        var orphanProductId = Guid.NewGuid();
-        var orphanWhId = Guid.NewGuid();
-        var orphanProduct = new Product
+        var orphanOrder = new PurchaseOrder
         {
-            Id = orphanProductId,
+            Id = Guid.NewGuid(),
             CompanyId = CompanyId,
-            Sku = "SKU-ORPHAN",
-            Name = "Orphan",
-            Description = "",
-            Status = ProductStatus.Active,
+            DocumentType = PurchaseOrderDocumentType.IncomingDespatch,
+            Direction = DespatchDirection.Incoming,
+            UserId = user.Id,
+            OrderNumber = "OLD-1",
+            ExternalSysmondId = Guid.NewGuid(),
+            ExternalSysmondCompanyPeriodId = PeriodId,
+            Status = PurchaseOrderStatus.Draft,
             CreatedAt = DateTime.UtcNow
         };
-        var orphanWh = new Warehouse
-        {
-            Id = orphanWhId,
-            CompanyId = CompanyId,
-            Name = "OrphanDepo",
-            Location = "B",
-            IsActive = true
-        };
-        var orphanTx = new StockTransaction
+        var otherPeriodOrphan = new PurchaseOrder
         {
             Id = Guid.NewGuid(),
             CompanyId = CompanyId,
-            ProductId = orphanProductId,
-            WarehouseId = orphanWhId,
+            DocumentType = PurchaseOrderDocumentType.OutgoingDespatch,
+            Direction = DespatchDirection.Outgoing,
             UserId = user.Id,
-            ExternalSysmondId = orphanExt,
-            ExternalSysmondDespatchId = Guid.NewGuid(),
-            ExternalSysmondCompanyPeriodId = PeriodId,
-            TransactionType = TransactionType.In,
-            Quantity = 3,
-            TransactionDate = DateTime.UtcNow
-        };
-        var otherPeriodOrphan = new StockTransaction
-        {
-            Id = Guid.NewGuid(),
-            CompanyId = CompanyId,
-            ProductId = orphanProductId,
-            WarehouseId = orphanWhId,
-            UserId = user.Id,
+            OrderNumber = "OTHER-1",
             ExternalSysmondId = Guid.NewGuid(),
-            ExternalSysmondDespatchId = Guid.NewGuid(),
             ExternalSysmondCompanyPeriodId = Guid.NewGuid(),
-            TransactionType = TransactionType.In,
-            Quantity = 9,
-            TransactionDate = DateTime.UtcNow
-        };
-        var orphanInventory = new Inventory
-        {
-            Id = Guid.NewGuid(),
-            CompanyId = CompanyId,
-            ProductId = orphanProductId,
-            WarehouseId = orphanWhId,
-            Quantity = 10,
-            LastUpdated = DateTime.UtcNow
+            Status = PurchaseOrderStatus.Draft,
+            CreatedAt = DateTime.UtcNow
         };
 
         _companyRepository.Setup(r => r.GetByIdAsync(CompanyId, It.IsAny<CancellationToken>()))
@@ -254,34 +225,317 @@ public class SysmondSyncServiceDespatchTests
             .ReturnsAsync(remoteProduct);
         _warehouseRepository.Setup(r => r.GetByExternalSysmondIdAsync(remoteWhExt, It.IsAny<CancellationToken>()))
             .ReturnsAsync(remoteWh);
-        _txRepository.Setup(r => r.GetByExternalSysmondIdAsync(remoteItem.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((StockTransaction?)null);
-        _inventoryRepository.Setup(r => r.GetByProductAndWarehouseAsync(remoteProduct.Id, remoteWh.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Inventory
-            {
-                Id = Guid.NewGuid(),
-                CompanyId = CompanyId,
-                ProductId = remoteProduct.Id,
-                WarehouseId = remoteWh.Id,
-                Quantity = 0,
-                LastUpdated = DateTime.UtcNow
-            });
-        _txRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { orphanTx, otherPeriodOrphan });
-        _txRepository.Setup(r => r.GetByIdAsync(orphanTx.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(orphanTx);
-        _productRepository.Setup(r => r.GetByIdAsync(orphanProductId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(orphanProduct);
-        _warehouseRepository.Setup(r => r.GetByIdAsync(orphanWhId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(orphanWh);
-        _inventoryRepository.Setup(r => r.GetByProductAndWarehouseAsync(orphanProductId, orphanWhId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(orphanInventory);
+        _poRepository.Setup(r => r.GetByExternalSysmondIdWithItemsAsync(remoteDespatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((PurchaseOrder?)null);
+        _poRepository.Setup(r => r.GetSysmondDespatchesByCompanyPeriodAsync(CompanyId, PeriodId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { orphanOrder });
 
         var result = await _sut.SyncDespatchesAsync(CompanyId, AccessToken);
 
         result.Deleted.Should().Be(1);
-        orphanInventory.Quantity.Should().Be(7);
-        _txRepository.Verify(r => r.Remove(orphanTx), Times.Once);
-        _txRepository.Verify(r => r.Remove(otherPeriodOrphan), Times.Never);
+        _poRepository.Verify(r => r.Remove(orphanOrder), Times.Once);
+        _poRepository.Verify(r => r.Remove(otherPeriodOrphan), Times.Never);
+    }
+
+    [Fact]
+    public async Task SyncDespatchesAsync_WhenDeliveryAddress_WritesCompanyAddressAndJson()
+    {
+        var company = SysmondSyncServiceTestHelper.CreateCompany(CompanyId);
+        var user = SysmondSyncServiceTestHelper.CreateUser(CompanyId);
+        var companyAddressId = Guid.NewGuid();
+        var deliveryAddressId = Guid.NewGuid();
+        var stockExt = Guid.NewGuid();
+        var whExt = Guid.NewGuid();
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ExternalSysmondId = stockExt,
+            Sku = "SKU-A",
+            Name = "Ürün",
+            Description = "",
+            Status = ProductStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        var warehouse = new Warehouse
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ExternalSysmondId = whExt,
+            Name = "Depo",
+            Location = "A",
+            IsActive = true
+        };
+        var despatch = SysmondSyncServiceTestHelper.CreateDespatch(
+            companyPeriodId: PeriodId,
+            companyAddressId: companyAddressId,
+            deliveryAddressId: deliveryAddressId);
+        var item = SysmondSyncServiceTestHelper.CreateDespatchItem(despatch.Id, stockExt, whExt, quantity: 1);
+        var address = new SysmondDespatchDeliveryAddressDto
+        {
+            Id = deliveryAddressId,
+            DespatchId = despatch.Id,
+            Street = "Atatürk Cad. No:1",
+            CityOther = "Ankara",
+            CountryId = 1,
+            Contact = new SysmondContactInfoDto { FirstName = "Ali", LastName = "Veli" }
+        };
+
+        _companyRepository.Setup(r => r.GetByIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(company);
+        _userRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { user });
+        _despatchQuery.Setup(s => s.GetDespatchesAsync(AccessToken, CompanyId, PeriodId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { despatch });
+        _despatchQuery.Setup(s => s.GetDespatchItemsAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { item });
+        _despatchQuery.Setup(s => s.GetDespatchDeliveryAddressAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(address);
+        _productRepository.Setup(r => r.GetByExternalSysmondIdAsync(stockExt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(product);
+        _warehouseRepository.Setup(r => r.GetByExternalSysmondIdAsync(whExt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(warehouse);
+        _poRepository.Setup(r => r.GetByExternalSysmondIdWithItemsAsync(despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((PurchaseOrder?)null);
+
+        PurchaseOrder? added = null;
+        _poRepository.Setup(r => r.AddAsync(It.IsAny<PurchaseOrder>(), It.IsAny<CancellationToken>()))
+            .Callback<PurchaseOrder, CancellationToken>((o, _) => added = o)
+            .Returns(Task.CompletedTask);
+
+        var result = await _sut.SyncDespatchesAsync(CompanyId, AccessToken);
+
+        result.Created.Should().Be(1);
+        result.Failed.Should().Be(0);
+        added.Should().NotBeNull();
+        added!.ExternalSysmondCompanyAddressId.Should().Be(companyAddressId);
+        added.DeliveryAddressJson.Should().NotBeNullOrWhiteSpace();
+        added.DeliveryAddressJson.Should().Contain("Ankara");
+        added.DeliveryAddressJson.Should().Contain("street");
+        added.DeliveryAddressJson.Should().Contain(deliveryAddressId.ToString());
+        _despatchQuery.Verify(
+            s => s.GetDespatchDeliveryAddressAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SyncDespatchesAsync_WhenNoDeliveryAddressId_StillFetchesAddressEndpoint()
+    {
+        var company = SysmondSyncServiceTestHelper.CreateCompany(CompanyId);
+        var user = SysmondSyncServiceTestHelper.CreateUser(CompanyId);
+        var stockExt = Guid.NewGuid();
+        var whExt = Guid.NewGuid();
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ExternalSysmondId = stockExt,
+            Sku = "SKU-B",
+            Name = "Ürün",
+            Description = "",
+            Status = ProductStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        var warehouse = new Warehouse
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ExternalSysmondId = whExt,
+            Name = "Depo",
+            Location = "A",
+            IsActive = true
+        };
+        var despatch = SysmondSyncServiceTestHelper.CreateDespatch(companyPeriodId: PeriodId);
+        var item = SysmondSyncServiceTestHelper.CreateDespatchItem(despatch.Id, stockExt, whExt, quantity: 1);
+        var address = new SysmondDespatchDeliveryAddressDto
+        {
+            Id = Guid.NewGuid(),
+            DespatchId = despatch.Id,
+            Street = "No DeliveryAddressId still ok",
+            CountryId = 1
+        };
+
+        _companyRepository.Setup(r => r.GetByIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(company);
+        _userRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { user });
+        _despatchQuery.Setup(s => s.GetDespatchesAsync(AccessToken, CompanyId, PeriodId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { despatch });
+        _despatchQuery.Setup(s => s.GetDespatchItemsAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { item });
+        _despatchQuery.Setup(s => s.GetDespatchDeliveryAddressAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(address);
+        _productRepository.Setup(r => r.GetByExternalSysmondIdAsync(stockExt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(product);
+        _warehouseRepository.Setup(r => r.GetByExternalSysmondIdAsync(whExt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(warehouse);
+        _poRepository.Setup(r => r.GetByExternalSysmondIdWithItemsAsync(despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((PurchaseOrder?)null);
+
+        PurchaseOrder? added = null;
+        _poRepository.Setup(r => r.AddAsync(It.IsAny<PurchaseOrder>(), It.IsAny<CancellationToken>()))
+            .Callback<PurchaseOrder, CancellationToken>((o, _) => added = o)
+            .Returns(Task.CompletedTask);
+
+        await _sut.SyncDespatchesAsync(CompanyId, AccessToken);
+
+        despatch.DeliveryAddressId.Should().BeNull();
+        _despatchQuery.Verify(
+            s => s.GetDespatchDeliveryAddressAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()),
+            Times.Once);
+        added.Should().NotBeNull();
+        added!.DeliveryAddressJson.Should().Contain("No DeliveryAddressId still ok");
+    }
+
+    [Fact]
+    public async Task SyncDespatchesAsync_WhenNoDelivery_FallsBackToCompanyAddress()
+    {
+        var company = SysmondSyncServiceTestHelper.CreateCompany(CompanyId);
+        var user = SysmondSyncServiceTestHelper.CreateUser(CompanyId);
+        var companyAddressId = Guid.NewGuid();
+        var stockExt = Guid.NewGuid();
+        var whExt = Guid.NewGuid();
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ExternalSysmondId = stockExt,
+            Sku = "SKU-C",
+            Name = "Ürün",
+            Description = "",
+            Status = ProductStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        var warehouse = new Warehouse
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ExternalSysmondId = whExt,
+            Name = "Depo",
+            Location = "A",
+            IsActive = true
+        };
+        var despatch = SysmondSyncServiceTestHelper.CreateDespatch(
+            companyPeriodId: PeriodId,
+            companyAddressId: companyAddressId);
+        var item = SysmondSyncServiceTestHelper.CreateDespatchItem(despatch.Id, stockExt, whExt, quantity: 1);
+        var firma = new SysmondCompanyAddressDto
+        {
+            Id = companyAddressId,
+            CompanyId = CompanyId,
+            Street = "Firma Cad. No:10",
+            CityName = "Istanbul",
+            CountryId = 1
+        };
+
+        _companyRepository.Setup(r => r.GetByIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(company);
+        _userRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { user });
+        _despatchQuery.Setup(s => s.GetDespatchesAsync(AccessToken, CompanyId, PeriodId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { despatch });
+        _despatchQuery.Setup(s => s.GetDespatchItemsAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { item });
+        _despatchQuery.Setup(s => s.GetDespatchDeliveryAddressAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SysmondDespatchDeliveryAddressDto?)null);
+        _despatchQuery.Setup(s => s.GetCompanyAddressByIdAsync(AccessToken, companyAddressId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(firma);
+        _productRepository.Setup(r => r.GetByExternalSysmondIdAsync(stockExt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(product);
+        _warehouseRepository.Setup(r => r.GetByExternalSysmondIdAsync(whExt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(warehouse);
+        _poRepository.Setup(r => r.GetByExternalSysmondIdWithItemsAsync(despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((PurchaseOrder?)null);
+
+        PurchaseOrder? added = null;
+        _poRepository.Setup(r => r.AddAsync(It.IsAny<PurchaseOrder>(), It.IsAny<CancellationToken>()))
+            .Callback<PurchaseOrder, CancellationToken>((o, _) => added = o)
+            .Returns(Task.CompletedTask);
+
+        var result = await _sut.SyncDespatchesAsync(CompanyId, AccessToken);
+
+        result.Failed.Should().Be(0);
+        added.Should().NotBeNull();
+        added!.ExternalSysmondCompanyAddressId.Should().Be(companyAddressId);
+        added.DeliveryAddressJson.Should().Contain("Firma Cad. No:10");
+        added.DeliveryAddressJson.Should().Contain("Istanbul");
+        _despatchQuery.Verify(
+            s => s.GetCompanyAddressByIdAsync(AccessToken, companyAddressId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SyncDespatchesAsync_WhenNoDelivery_UsesDespatchPartyCariAddress()
+    {
+        var company = SysmondSyncServiceTestHelper.CreateCompany(CompanyId);
+        var user = SysmondSyncServiceTestHelper.CreateUser(CompanyId);
+        var stockExt = Guid.NewGuid();
+        var whExt = Guid.NewGuid();
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ExternalSysmondId = stockExt,
+            Sku = "SKU-D",
+            Name = "Ürün",
+            Description = "",
+            Status = ProductStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        var warehouse = new Warehouse
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ExternalSysmondId = whExt,
+            Name = "Depo",
+            Location = "A",
+            IsActive = true
+        };
+        // companyAddressId yok — önceki senaryoda 6 belge böyleydi
+        var despatch = SysmondSyncServiceTestHelper.CreateDespatch(companyPeriodId: PeriodId);
+        var item = SysmondSyncServiceTestHelper.CreateDespatchItem(despatch.Id, stockExt, whExt, quantity: 1);
+        var seller = new SysmondDespatchPartyDto
+        {
+            Id = Guid.NewGuid(),
+            Type = 30, // SellerSupplier
+            ActName = "Cari Firma A.Ş.",
+            Street = "Cari Sok. No:5",
+            CityOther = "Bursa",
+            CountryId = 1
+        };
+
+        _companyRepository.Setup(r => r.GetByIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(company);
+        _userRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { user });
+        _despatchQuery.Setup(s => s.GetDespatchesAsync(AccessToken, CompanyId, PeriodId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { despatch });
+        _despatchQuery.Setup(s => s.GetDespatchItemsAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { item });
+        _despatchQuery.Setup(s => s.GetDespatchDeliveryAddressAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SysmondDespatchDeliveryAddressDto?)null);
+        _despatchQuery.Setup(s => s.GetDespatchPartiesAsync(AccessToken, CompanyId, despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { seller });
+        _productRepository.Setup(r => r.GetByExternalSysmondIdAsync(stockExt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(product);
+        _warehouseRepository.Setup(r => r.GetByExternalSysmondIdAsync(whExt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(warehouse);
+        _poRepository.Setup(r => r.GetByExternalSysmondIdWithItemsAsync(despatch.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((PurchaseOrder?)null);
+
+        PurchaseOrder? added = null;
+        _poRepository.Setup(r => r.AddAsync(It.IsAny<PurchaseOrder>(), It.IsAny<CancellationToken>()))
+            .Callback<PurchaseOrder, CancellationToken>((o, _) => added = o)
+            .Returns(Task.CompletedTask);
+
+        var result = await _sut.SyncDespatchesAsync(CompanyId, AccessToken);
+
+        result.Failed.Should().Be(0);
+        added!.DeliveryAddressJson.Should().Contain("Cari Sok. No:5");
+        added.DeliveryAddressJson.Should().Contain("Bursa");
+        added.DeliveryAddressJson.Should().Contain("Cari Firma");
+        _despatchQuery.Verify(
+            s => s.GetCompanyAddressByIdAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

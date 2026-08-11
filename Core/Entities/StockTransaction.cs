@@ -3,9 +3,11 @@ using Core.Enums;
 namespace Core.Entities;
 
 /// <summary>
-/// Stok hareket kaydı (audit log). Her giriş/çıkış/transfer/düzeltme burada tutulur;
-/// Inventory.Quantity bu kayıtlara göre güncellenir. Hareket bir transferden veya
-/// satın alma siparişinden kaynaklanıyorsa TransferId / PurchaseOrderId dolu olur.
+/// Stok hareket kaydı (audit log). Belge (PurchaseOrder / irsaliye) kalemlerinden ayrıdır;
+/// miktar değişimi burada tutulur. Hareket bir transferden veya belgeden (PO receive / irsaliye stok etkisi)
+/// geliyorsa TransferId / PurchaseOrderId dolu olur.
+/// Sysmond despatch-item sync legacy alanları ExternalSysmond* ile tutulabilir; belge modeli PO'ya taşındıkça
+/// yeni hareketler PurchaseOrderId üzerinden bağlanır.
 /// </summary>
 public class StockTransaction
 {

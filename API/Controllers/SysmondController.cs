@@ -68,9 +68,10 @@ public class SysmondController : ControllerBase
     }
 
     /// <summary>
-    /// İrsaliye (despatch-query) → StockTransaction upsert + Inventory delta.
-    /// Aktif CompanyPeriod ile çekilir; aynı dönemdeki remote'da olmayan Sysmond hareketleri silinir.
-    /// Incoming → In, Outgoing → Out.
+    /// İrsaliye (despatch-query) → PurchaseOrder + PurchaseOrderItem upsert.
+    /// companyAddressId + adres JSON (teslimat → cari party → şirket adresi) yazılır.
+    /// Aktif CompanyPeriod ile çekilir; aynı dönemdeki remote'da olmayan belgeler silinir.
+    /// Stok hareketi (StockTransaction) bu sync'te yazılmaz.
     /// Örnek: POST /api/sysmond/sync/despatches?companyId={sysmondCompanyGuid}
     /// </summary>
     [HttpPost("sync/despatches")]

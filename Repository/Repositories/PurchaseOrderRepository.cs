@@ -1,4 +1,5 @@
 using Core.Entities;
+using Core.Enums;
 using Core.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Repository.Data;
@@ -30,6 +31,31 @@ public class PurchaseOrderRepository : GenericRepository<PurchaseOrder>, IPurcha
         return await DbSet.AsNoTracking()
             .Where(x => x.CompanyId == companyId)
             .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PurchaseOrder?> GetByExternalSysmondIdWithItemsAsync(
+        Guid externalSysmondId,
+        CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.ExternalSysmondId == externalSysmondId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PurchaseOrder>> GetSysmondDespatchesByCompanyPeriodAsync(
+        Guid companyId,
+        Guid companyPeriodId,
+        CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .Include(x => x.Items)
+            .Where(x =>
+                x.CompanyId == companyId
+                && x.ExternalSysmondCompanyPeriodId == companyPeriodId
+                && x.ExternalSysmondId != null
+                && (x.DocumentType == PurchaseOrderDocumentType.IncomingDespatch
+                    || x.DocumentType == PurchaseOrderDocumentType.OutgoingDespatch))
             .ToListAsync(cancellationToken);
     }
 }
