@@ -22,6 +22,7 @@ public class StockTransactionConfiguration : IEntityTypeConfiguration<StockTrans
         builder.Property(x => x.PurchaseOrderId).HasColumnName("purchase_order_id");
         builder.Property(x => x.ExternalSysmondId).HasColumnName("external_sysmond_id");
         builder.Property(x => x.ExternalSysmondDespatchId).HasColumnName("external_sysmond_despatch_id");
+        builder.Property(x => x.ExternalSysmondCompanyPeriodId).HasColumnName("external_sysmond_company_period_id");
         builder.Property(x => x.TransactionType).HasColumnName("transaction_type").HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.Quantity).HasColumnName("quantity").IsRequired();
         builder.Property(x => x.ReasonCode).HasColumnName("reason_code").HasConversion<string>().HasMaxLength(50);
@@ -34,6 +35,7 @@ public class StockTransactionConfiguration : IEntityTypeConfiguration<StockTrans
             .IsUnique()
             .HasFilter("[external_sysmond_id] IS NOT NULL");
         builder.HasIndex(x => x.ExternalSysmondDespatchId);
+        builder.HasIndex(x => x.ExternalSysmondCompanyPeriodId);
 
         builder.HasOne(x => x.Company)
             .WithMany(x => x.StockTransactions)

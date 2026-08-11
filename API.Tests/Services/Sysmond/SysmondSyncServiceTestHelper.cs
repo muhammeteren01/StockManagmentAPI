@@ -107,13 +107,15 @@ internal static class SysmondSyncServiceTestHelper
     public static SysmondDespatchDto CreateDespatch(
         Guid? id = null,
         int direction = SysmondDespatchMapper.DirectionIncoming,
-        string? docNo = "IRS-1") =>
+        string? docNo = "IRS-1",
+        Guid? companyPeriodId = null) =>
         new()
         {
             Id = id ?? Guid.NewGuid(),
             Direction = direction,
             Status = 20,
             DocNo = docNo,
+            CompanyPeriodId = companyPeriodId ?? Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
             IssueDate = DateTime.UtcNow.Date,
             ActName = "Test Cari",
             ActVknTckn = "1234567890"

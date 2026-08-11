@@ -55,6 +55,13 @@ public class SysmondSyncServiceDespatchTests
                 }
             });
 
+        _productRepository
+            .Setup(r => r.GetBySkuAsync(CompanyId, "__SYSMOND_NO_STOCK__", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Product?)null);
+        _warehouseRepository
+            .Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Warehouse>());
+
         _txRepository
             .Setup(r => r.GetByCompanyIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<StockTransaction>());
@@ -104,7 +111,7 @@ public class SysmondSyncServiceDespatchTests
             .ReturnsAsync(company);
         _userRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { user });
-        _despatchQuery.Setup(s => s.GetDespatchesAsync(AccessToken, CompanyId, null, It.IsAny<CancellationToken>()))
+        _despatchQuery.Setup(s => s.GetDespatchesAsync(AccessToken, CompanyId, PeriodId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { despatch });
         _despatchQuery.Setup(s => s.GetDespatchItemsAsync(AccessToken, despatch.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { item });
@@ -138,6 +145,7 @@ public class SysmondSyncServiceDespatchTests
         added.Quantity.Should().Be(7);
         added.ExternalSysmondId.Should().Be(item.Id);
         added.ExternalSysmondDespatchId.Should().Be(despatch.Id);
+        added.ExternalSysmondCompanyPeriodId.Should().Be(PeriodId);
         added.ReferenceNo.Should().Be("IRS-1");
         addedInv.Should().NotBeNull();
         addedInv!.Quantity.Should().Be(7);
@@ -145,11 +153,11 @@ public class SysmondSyncServiceDespatchTests
     }
 
     [Fact]
-    public async Task SyncDespatchesAsync_WhenRemoteSubset_DoesNotDeleteOrphanWhileDeleteDisabled()
+    public async Task SyncDespatchesAsync_WhenRemoteSubset_DeletesSamePeriodOrphanAndReversesInventory()
     {
         var company = SysmondSyncServiceTestHelper.CreateCompany(CompanyId);
         var user = SysmondSyncServiceTestHelper.CreateUser(CompanyId);
-        var remoteDespatch = SysmondSyncServiceTestHelper.CreateDespatch();
+        var remoteDespatch = SysmondSyncServiceTestHelper.CreateDespatch(companyPeriodId: PeriodId);
         var remoteStockExt = Guid.NewGuid();
         var remoteWhExt = Guid.NewGuid();
         var remoteProduct = new Product
@@ -178,6 +186,24 @@ public class SysmondSyncServiceDespatchTests
         var orphanExt = Guid.NewGuid();
         var orphanProductId = Guid.NewGuid();
         var orphanWhId = Guid.NewGuid();
+        var orphanProduct = new Product
+        {
+            Id = orphanProductId,
+            CompanyId = CompanyId,
+            Sku = "SKU-ORPHAN",
+            Name = "Orphan",
+            Description = "",
+            Status = ProductStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        var orphanWh = new Warehouse
+        {
+            Id = orphanWhId,
+            CompanyId = CompanyId,
+            Name = "OrphanDepo",
+            Location = "B",
+            IsActive = true
+        };
         var orphanTx = new StockTransaction
         {
             Id = Guid.NewGuid(),
@@ -187,8 +213,23 @@ public class SysmondSyncServiceDespatchTests
             UserId = user.Id,
             ExternalSysmondId = orphanExt,
             ExternalSysmondDespatchId = Guid.NewGuid(),
+            ExternalSysmondCompanyPeriodId = PeriodId,
             TransactionType = TransactionType.In,
             Quantity = 3,
+            TransactionDate = DateTime.UtcNow
+        };
+        var otherPeriodOrphan = new StockTransaction
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = CompanyId,
+            ProductId = orphanProductId,
+            WarehouseId = orphanWhId,
+            UserId = user.Id,
+            ExternalSysmondId = Guid.NewGuid(),
+            ExternalSysmondDespatchId = Guid.NewGuid(),
+            ExternalSysmondCompanyPeriodId = Guid.NewGuid(),
+            TransactionType = TransactionType.In,
+            Quantity = 9,
             TransactionDate = DateTime.UtcNow
         };
         var orphanInventory = new Inventory
@@ -205,7 +246,7 @@ public class SysmondSyncServiceDespatchTests
             .ReturnsAsync(company);
         _userRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { user });
-        _despatchQuery.Setup(s => s.GetDespatchesAsync(AccessToken, CompanyId, null, It.IsAny<CancellationToken>()))
+        _despatchQuery.Setup(s => s.GetDespatchesAsync(AccessToken, CompanyId, PeriodId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { remoteDespatch });
         _despatchQuery.Setup(s => s.GetDespatchItemsAsync(AccessToken, remoteDespatch.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { remoteItem });
@@ -226,17 +267,21 @@ public class SysmondSyncServiceDespatchTests
                 LastUpdated = DateTime.UtcNow
             });
         _txRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { orphanTx });
+            .ReturnsAsync(new[] { orphanTx, otherPeriodOrphan });
         _txRepository.Setup(r => r.GetByIdAsync(orphanTx.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(orphanTx);
+        _productRepository.Setup(r => r.GetByIdAsync(orphanProductId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orphanProduct);
+        _warehouseRepository.Setup(r => r.GetByIdAsync(orphanWhId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orphanWh);
         _inventoryRepository.Setup(r => r.GetByProductAndWarehouseAsync(orphanProductId, orphanWhId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(orphanInventory);
 
         var result = await _sut.SyncDespatchesAsync(CompanyId, AccessToken);
 
-        result.Deleted.Should().Be(0);
-        orphanInventory.Quantity.Should().Be(10);
-        _txRepository.Verify(r => r.Remove(It.IsAny<StockTransaction>()), Times.Never);
-        _txRepository.Verify(r => r.GetByCompanyIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        result.Deleted.Should().Be(1);
+        orphanInventory.Quantity.Should().Be(7);
+        _txRepository.Verify(r => r.Remove(orphanTx), Times.Once);
+        _txRepository.Verify(r => r.Remove(otherPeriodOrphan), Times.Never);
     }
 }

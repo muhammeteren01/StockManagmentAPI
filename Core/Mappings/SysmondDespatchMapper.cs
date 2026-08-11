@@ -61,6 +61,7 @@ public static class SysmondDespatchMapper
             UserId = userId,
             ExternalSysmondId = item.Id,
             ExternalSysmondDespatchId = header.Id,
+            ExternalSysmondCompanyPeriodId = NormalizePeriodId(header.CompanyPeriodId),
             TransactionType = MapTransactionType(header.Direction),
             Quantity = MapQuantity(item.Quantity),
             ReferenceNo = Truncate(header.DocNo, 100),
@@ -78,6 +79,7 @@ public static class SysmondDespatchMapper
     {
         entity.ExternalSysmondId = item.Id;
         entity.ExternalSysmondDespatchId = header.Id;
+        entity.ExternalSysmondCompanyPeriodId = NormalizePeriodId(header.CompanyPeriodId);
         entity.ProductId = productId;
         entity.WarehouseId = warehouseId;
         entity.TransactionType = MapTransactionType(header.Direction);
@@ -86,6 +88,9 @@ public static class SysmondDespatchMapper
         entity.Notes = BuildNotes(header, item);
         entity.TransactionDate = header.IssueDate == default ? entity.TransactionDate : header.IssueDate;
     }
+
+    private static Guid? NormalizePeriodId(Guid companyPeriodId)
+        => companyPeriodId == Guid.Empty ? null : companyPeriodId;
 
     private static string? Truncate(string? value, int maxLength)
     {

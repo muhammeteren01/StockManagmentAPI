@@ -69,8 +69,8 @@ public class SysmondController : ControllerBase
 
     /// <summary>
     /// İrsaliye (despatch-query) → StockTransaction upsert + Inventory delta.
-    /// Taslak dahil tüm durumlar çekilir; orphan silme şimdilik kapalı.
-    /// Incoming → In, Outgoing → Out. Product/Warehouse ExternalSysmondId gerekir.
+    /// Aktif CompanyPeriod ile çekilir; aynı dönemdeki remote'da olmayan Sysmond hareketleri silinir.
+    /// Incoming → In, Outgoing → Out.
     /// Örnek: POST /api/sysmond/sync/despatches?companyId={sysmondCompanyGuid}
     /// </summary>
     [HttpPost("sync/despatches")]

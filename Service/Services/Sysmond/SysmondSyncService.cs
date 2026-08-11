@@ -21,7 +21,7 @@ namespace Service.Services.Sysmond;
 /// Inventory orphan: Sysmond-linked (ExternalSysmondId veya Product+Warehouse ExternalSysmondId)
 /// ve remote (stockId, warehouseId) set'te yoksa silinir.
 /// Despatch: kalemler StockTransaction (ExternalSysmondId = item.id); Inventory delta.
-/// Despatch orphan silme şimdilik kapalı (durum/filtre yüzünden yanlış silmeyi önlemek için).
+/// Despatch orphan: yalnızca aktif CompanyPeriod ile eşleşen ExternalSysmondCompanyPeriodId satırları.
 /// </summary>
 public class SysmondSyncService : ISysmondSyncService
 {
@@ -475,13 +475,39 @@ public class SysmondSyncService : ISysmondSyncService
             return result;
         }
 
-        // CompanyPeriodId gönderilmez: dönem filtresi giden/gelen irsaliyeleri düşürebilir.
-        // Taslak + onaylı + tüm dönemler CompanyId ile gelir.
+        Guid? companyPeriodId = null;
+        try
+        {
+            var periods = await _inventoryQuery.GetMyCompanyPeriodsAsync(accessToken, cancellationToken);
+            var period =
+                periods.FirstOrDefault(p => p.CompanyId == company.Id && p.IsActive)
+                ?? periods.FirstOrDefault(p => p.CompanyId == company.Id);
+
+            if (period is not null && period.Id != Guid.Empty)
+            {
+                companyPeriodId = period.Id;
+                _logger.LogInformation(
+                    "Sysmond despatch sync aktif CompanyPeriod: {CompanyPeriodId} ({PeriodName})",
+                    companyPeriodId,
+                    period.Name);
+            }
+            else
+            {
+                errors.Add(
+                    $"Aktif CompanyPeriod bulunamadı; dönem filtresi ve orphan silme atlanacak (CompanyId={company.Id}).");
+            }
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"my-company-periods atlandı; orphan silme kapalı: {ex.Message}");
+            _logger.LogWarning(ex, "Sysmond my-company-periods (despatch) başarısız: {CompanyId}", sysmondCompanyId);
+        }
+
         IReadOnlyList<SysmondDespatchDto> despatches;
         try
         {
             despatches = await _despatchQuery.GetDespatchesAsync(
-                accessToken, company.Id, companyPeriodId: null, cancellationToken);
+                accessToken, company.Id, companyPeriodId, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -667,12 +693,23 @@ public class SysmondSyncService : ISysmondSyncService
             }
         }
 
-        // Orphan delete şimdilik kapalı: filtre/durum (taslak vb.) yüzünden remote'da
-        // görünmeyen kalemler yerel StockTransaction'ı silmesin.
-        // Sysmond'ta gerçek silme senkronu ayrıca açılacak.
-        _logger.LogInformation(
-            "Sysmond despatch sync orphan delete atlandı (disabled). RemoteItemIds={Count}",
-            remoteItemIds.Count);
+        if (companyPeriodId is Guid syncPeriodId)
+        {
+            await DeleteDespatchTransactionsMissingFromRemoteAsync(
+                company.Id,
+                syncPeriodId,
+                remoteItemIds,
+                inventoryCache,
+                result,
+                errors,
+                cancellationToken);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Sysmond despatch sync orphan delete atlandı (CompanyPeriod yok). RemoteItemIds={Count}",
+                remoteItemIds.Count);
+        }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         result.Errors = errors;
@@ -1039,16 +1076,25 @@ public class SysmondSyncService : ISysmondSyncService
         }
     }
 
+    /// <summary>
+    /// Yalnızca sync edilen CompanyPeriod içindeki Sysmond-linked hareketler:
+    /// remote set'te yoksa silinir (inventory reverse sadece gerçek stok satırında).
+    /// </summary>
     private async Task DeleteDespatchTransactionsMissingFromRemoteAsync(
         Guid companyId,
+        Guid companyPeriodId,
         HashSet<Guid> remoteItemIds,
+        Dictionary<(Guid ProductId, Guid WarehouseId), Inventory> inventoryCache,
         SysmondDespatchSyncResult result,
         List<string> errors,
         CancellationToken cancellationToken)
     {
         var local = await _stockTransactionRepository.GetByCompanyIdAsync(companyId, cancellationToken);
         var orphans = local
-            .Where(t => t.ExternalSysmondId is Guid extId && !remoteItemIds.Contains(extId))
+            .Where(t =>
+                t.ExternalSysmondCompanyPeriodId == companyPeriodId
+                && t.ExternalSysmondId is Guid extId
+                && !remoteItemIds.Contains(extId))
             .ToList();
 
         foreach (var orphan in orphans)
@@ -1059,11 +1105,19 @@ public class SysmondSyncService : ISysmondSyncService
                 if (entity is null)
                     continue;
 
-                var inventory = await GetOrCreateInventoryAsync(
-                    entity.CompanyId, entity.ProductId, entity.WarehouseId, cancellationToken);
-                ApplyQuantityChange(inventory, ReverseType(entity.TransactionType), entity.Quantity);
-                inventory.LastUpdated = DateTime.UtcNow;
-                _inventoryRepository.Update(inventory);
+                if (entity.Quantity > 0
+                    && await WasInventoryAffectingAsync(
+                        entity.ProductId, entity.WarehouseId, cancellationToken))
+                {
+                    var inventory = await GetOrCreateInventoryCachedAsync(
+                        inventoryCache,
+                        entity.CompanyId,
+                        entity.ProductId,
+                        entity.WarehouseId,
+                        cancellationToken);
+                    ApplyQuantityChange(inventory, ReverseType(entity.TransactionType), entity.Quantity);
+                    inventory.LastUpdated = DateTime.UtcNow;
+                }
 
                 _stockTransactionRepository.Remove(entity);
                 result.Deleted++;

@@ -27,6 +27,9 @@ public class StockTransaction
     /// <summary>Sysmond despatch.id — header gruplama.</summary>
     public Guid? ExternalSysmondDespatchId { get; set; }
 
+    /// <summary>Sysmond despatch.companyPeriodId — dönem-scoped orphan için.</summary>
+    public Guid? ExternalSysmondCompanyPeriodId { get; set; }
+
     /// <summary>Hareket türü. DB'ye string olarak yazılır (DbContext'te HasConversion ile).</summary>
     public TransactionType TransactionType { get; set; }
 

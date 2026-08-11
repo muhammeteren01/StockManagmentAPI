@@ -363,6 +363,10 @@ namespace Repository.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("company_id");
 
+                    b.Property<Guid?>("ExternalSysmondCompanyPeriodId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("external_sysmond_company_period_id");
+
                     b.Property<Guid?>("ExternalSysmondDespatchId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("external_sysmond_despatch_id");
@@ -422,6 +426,8 @@ namespace Repository.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId");
+
+                    b.HasIndex("ExternalSysmondCompanyPeriodId");
 
                     b.HasIndex("ExternalSysmondDespatchId");
 
