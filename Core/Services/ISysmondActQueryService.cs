@@ -22,7 +22,22 @@ public interface ISysmondActQueryService
     Task<IReadOnlyList<SysmondActAddressDto>> GetActAddressesAsync(
         string accessToken,
         Guid actId,
+        Guid companyId,
         bool includeDisabled = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>act-address ham yanıt + parse (tanılama).</summary>
+    Task<SysmondActAddressDebugResult> GetActAddressesDebugAsync(
+        string accessToken,
+        Guid actId,
+        Guid companyId,
+        bool includeDisabled = true,
+        CancellationToken cancellationToken = default);
+
+    /// <summary><c>GET /api/app/act-query/{id}/by-id</c></summary>
+    Task<SysmondActDto?> GetActByIdAsync(
+        string accessToken,
+        Guid actId,
         CancellationToken cancellationToken = default);
 
     /// <summary>

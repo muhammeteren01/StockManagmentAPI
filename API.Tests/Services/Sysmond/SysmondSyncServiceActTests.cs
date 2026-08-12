@@ -52,6 +52,10 @@ public class SysmondSyncServiceActTests
         _unitOfWork
             .Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+
+        _actQuery
+            .Setup(q => q.GetActByIdAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SysmondActDto?)null);
     }
 
     [Fact]
@@ -80,21 +84,27 @@ public class SysmondSyncServiceActTests
             });
 
         _actQuery
-            .Setup(q => q.GetActAddressesAsync(
+            .Setup(q => q.GetActAddressesDebugAsync(
                 AccessToken,
                 actId,
-                true,
+                CompanyId,
+                false,
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<SysmondActAddressDto>
+            .ReturnsAsync(new SysmondActAddressDebugResult
             {
-                new()
+                HttpStatusCode = 200,
+                ParsedCount = 1,
+                Items = new List<SysmondActAddressDto>
                 {
-                    Id = addressId,
-                    ActId = actId,
-                    Type = 10,
-                    CountryId = 1,
-                    Street = "Deneme Cad.",
-                    CityOther = "Ankara"
+                    new()
+                    {
+                        Id = addressId,
+                        ActId = actId,
+                        Type = 10,
+                        CountryId = 1,
+                        Street = "Deneme Cad.",
+                        CityOther = "Ankara"
+                    }
                 }
             });
 
@@ -144,6 +154,83 @@ public class SysmondSyncServiceActTests
         addedAddress!.ExternalSysmondId.Should().Be(addressId);
         addedAddress.Street.Should().Be("Deneme Cad.");
         addedAddress.ActId.Should().Be(addedAct.Id);
+    }
+
+    [Fact]
+    public async Task SyncActsAsync_WhenActAddressEmpty_UsesActFullAddressFallback()
+    {
+        var actId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+        _actQuery
+            .Setup(q => q.GetAllActsAsync(
+                AccessToken,
+                CompanyId,
+                It.IsAny<IReadOnlyList<int>?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SysmondActDto>
+            {
+                new()
+                {
+                    Id = actId,
+                    CompanyId = CompanyId,
+                    Type = 10,
+                    Name = "earsiv",
+                    VknTckn = "2222222222",
+                    ActFullAddress = "Atatürk Cad. No:1",
+                    CityOther = "Ankara",
+                    CountryId = 1
+                }
+            });
+
+        _actQuery
+            .Setup(q => q.GetActAddressesDebugAsync(
+                AccessToken,
+                actId,
+                CompanyId,
+                false,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SysmondActAddressDebugResult
+            {
+                HttpStatusCode = 200,
+                ParsedCount = 0,
+                Items = Array.Empty<SysmondActAddressDto>(),
+                RawBody = """{"status":{"success":true},"data":[]}"""
+            });
+
+        _actRepository
+            .Setup(r => r.GetByExternalSysmondIdAsync(actId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Act?)null);
+
+        _actAddressRepository
+            .Setup(r => r.GetByExternalSysmondIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ActAddress?)null);
+
+        _actAddressRepository
+            .Setup(r => r.GetByActIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ActAddress>());
+
+        _actRepository
+            .Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Act>());
+
+        ActAddress? addedAddress = null;
+        _actAddressRepository
+            .Setup(r => r.AddAsync(It.IsAny<ActAddress>(), It.IsAny<CancellationToken>()))
+            .Callback<ActAddress, CancellationToken>((a, _) => addedAddress = a)
+            .Returns(Task.CompletedTask);
+
+        _actRepository
+            .Setup(r => r.AddAsync(It.IsAny<Act>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await _sut.SyncActsAsync(CompanyId, AccessToken);
+
+        result.AddressesFetched.Should().Be(1);
+        result.AddressesFromActFullAddress.Should().Be(1);
+        result.AddressesCreated.Should().Be(1);
+        addedAddress.Should().NotBeNull();
+        addedAddress!.Street.Should().Be("Atatürk Cad. No:1");
+        addedAddress.CityOther.Should().Be("Ankara");
     }
 
     [Fact]

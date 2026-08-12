@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Core.DTOs.Sysmond;
 using Core.Entities;
 
@@ -208,5 +210,58 @@ public static class SysmondActMapper
             return null;
         var trimmed = value.Trim();
         return trimmed.Length <= max ? trimmed : trimmed[..max];
+    }
+
+    private static readonly Guid SyntheticAddressNamespace =
+        Guid.Parse("a3b8c2d1-5e6f-4789-a012-3c4d5e6f7890");
+
+    private static Guid CreateSyntheticAddressId(Guid actId)
+    {
+        var input = Encoding.UTF8.GetBytes($"{SyntheticAddressNamespace:D}:{actId:D}");
+        var hash = MD5.HashData(input);
+        hash[6] = (byte)((hash[6] & 0x0F) | 0x50);
+        hash[8] = (byte)((hash[8] & 0x3F) | 0x80);
+        return new Guid(hash);
+    }
+
+    /// <summary>act-address boşsa act-query by-id actFullAddress alanından sentetik adres.</summary>
+    public static SysmondActAddressDto? CreateFallbackAddressFromAct(SysmondActDto act)
+    {
+        if (act.Id == Guid.Empty)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(act.ActFullAddress))
+            return null;
+
+        return new SysmondActAddressDto
+        {
+            Id = CreateSyntheticAddressId(act.Id),
+            ActId = act.Id,
+            Type = 10,
+            CountryId = act.CountryId ?? 1,
+            CityId = act.CityId,
+            CityOther = FirstNonEmpty(act.CityOther, act.CityName),
+            Street = act.ActFullAddress,
+            CountryName = act.CountryName,
+            CityName = act.CityName,
+            IsDisabled = false
+        };
+    }
+
+    public static void EnrichFromDetail(SysmondActDto target, SysmondActDto detail)
+    {
+        if (string.IsNullOrWhiteSpace(target.ActFullAddress) && !string.IsNullOrWhiteSpace(detail.ActFullAddress))
+            target.ActFullAddress = detail.ActFullAddress;
+        if (target.CityId is null && detail.CityId is not null)
+            target.CityId = detail.CityId;
+        if (string.IsNullOrWhiteSpace(target.CityOther) && !string.IsNullOrWhiteSpace(detail.CityOther))
+            target.CityOther = detail.CityOther;
+        if (string.IsNullOrWhiteSpace(target.CityName) && !string.IsNullOrWhiteSpace(detail.CityName))
+            target.CityName = detail.CityName;
+        if (string.IsNullOrWhiteSpace(target.CountryName) && !string.IsNullOrWhiteSpace(detail.CountryName))
+            target.CountryName = detail.CountryName;
+        if (target.CountryId is null && detail.CountryId is not null)
+            target.CountryId = detail.CountryId;
+        target.CanAccessAddressAndContactInfo = detail.CanAccessAddressAndContactInfo;
     }
 }

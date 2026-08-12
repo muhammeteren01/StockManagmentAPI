@@ -5,6 +5,7 @@ public class SysmondActSyncResult
 {
     public int ActsFetched { get; set; }
     public int AddressesFetched { get; set; }
+    public int AddressesFromActFullAddress { get; set; }
 
     public int ActsCreated { get; set; }
     public int ActsUpdated { get; set; }
@@ -19,4 +20,5 @@ public class SysmondActSyncResult
     public int SkippedCompanyNotFound { get; set; }
 
     public IReadOnlyList<string> Errors { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Warnings { get; set; } = Array.Empty<string>();
 }

@@ -198,7 +198,7 @@ public class SysmondSyncServiceIncomingDespatchCreateTests
                 }
             });
         _actQuery
-            .Setup(q => q.GetActAddressesAsync(AccessToken, actId, false, It.IsAny<CancellationToken>()))
+            .Setup(q => q.GetActAddressesAsync(AccessToken, actId, CompanyId, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SysmondActAddressDto>
             {
                 new()

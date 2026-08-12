@@ -19,10 +19,14 @@ namespace API.Controllers;
 public class SysmondController : ControllerBase
 {
     private readonly ISysmondSyncService _syncService;
+    private readonly ISysmondActQueryService _actQuery;
 
-    public SysmondController(ISysmondSyncService syncService)
+    public SysmondController(
+        ISysmondSyncService syncService,
+        ISysmondActQueryService actQuery)
     {
         _syncService = syncService;
+        _actQuery = actQuery;
     }
 
     /// <summary>
@@ -96,6 +100,35 @@ public class SysmondController : ControllerBase
     {
         var (cid, token) = RequireCompanyAndBearer(companyId);
         var result = await _syncService.SyncActsAsync(cid, token, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// act-address ham yanıt + parse sonucu (tanılama).
+    /// Örnek: GET /api/sysmond/debug/act-address?companyId={guid}&amp;actId={actGuid}
+    /// </summary>
+    [HttpGet("debug/act-address")]
+    public async Task<IActionResult> DebugActAddress(
+        [FromQuery] Guid companyId,
+        [FromQuery] Guid actId,
+        CancellationToken cancellationToken = default)
+    {
+        _ = companyId;
+        var (_, token) = RequireCompanyAndBearer(companyId);
+        if (actId == Guid.Empty)
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure(nameof(actId), "actId zorunludur.")
+            ]);
+        }
+
+        var result = await _actQuery.GetActAddressesDebugAsync(
+            token,
+            actId,
+            companyId,
+            includeDisabled: false,
+            cancellationToken);
         return Ok(result);
     }
 

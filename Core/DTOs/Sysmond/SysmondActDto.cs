@@ -21,6 +21,10 @@ public class SysmondActDto
     public int? CountryId { get; set; }
     public int? CityId { get; set; }
     public string? CityOther { get; set; }
+    public string? CityName { get; set; }
+    public string? CountryName { get; set; }
+
+    public bool CanAccessAddressAndContactInfo { get; set; }
 
     public int Scenario { get; set; }
     public bool IsDisabled { get; set; }

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Core.DTOs.Sysmond;
+using Core.Mappings;
 using Core.Services;
 using Core.Settings;
 using Microsoft.Extensions.Logging;
@@ -170,105 +171,6 @@ public class SysmondActQueryService : ISysmondActQueryService
         JsonSerializer.Deserialize<List<SysmondActDto>>(array.GetRawText(), JsonOptions)
         ?? [];
 
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<SysmondActAddressDto>> GetActAddressesAsync(
-        string accessToken,
-        Guid actId,
-        bool includeDisabled = false,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
-        if (actId == Guid.Empty)
-            throw new ArgumentException("actId zorunludur.", nameof(actId));
-
-        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
-        // Dokümantasyon: actId zorunlu; includeDisabled opsiyonel.
-        var url =
-            $"api/app/act-address?actId={actId:D}&includeDisabled={(includeDisabled ? "true" : "false")}";
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        using var response = await client.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound
-            || IsNotFoundBusinessError(response.StatusCode, body))
-        {
-            _logger.LogInformation(
-                "Sysmond act-address yok/boş: ActId={ActId}, Status={Status}",
-                actId,
-                (int)response.StatusCode);
-            return Array.Empty<SysmondActAddressDto>();
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException(
-                $"Sysmond act-address başarısız ({(int)response.StatusCode}): {Truncate(body, 500)}");
-        }
-
-        var items = ParseActAddressList(body);
-        if (items.Count == 0)
-        {
-            _logger.LogWarning(
-                "Sysmond act-address 200 ama liste boş: ActId={ActId}, Body={Body}",
-                actId,
-                Truncate(body, 800));
-        }
-        else
-        {
-            _logger.LogInformation(
-                "Sysmond act-address: ActId={ActId}, Count={Count}",
-                actId,
-                items.Count);
-        }
-
-        return items;
-    }
-
-    /// <summary>
-    /// data / items / root-array; success+data ve status+data sarmalayıcılarını destekler.
-    /// </summary>
-    private static IReadOnlyList<SysmondActAddressDto> ParseActAddressList(string body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-            return Array.Empty<SysmondActAddressDto>();
-
-        using var doc = JsonDocument.Parse(body);
-        var root = doc.RootElement;
-
-        if (root.ValueKind == JsonValueKind.Array)
-            return DeserializeArray(root);
-
-        if (root.ValueKind != JsonValueKind.Object)
-            return Array.Empty<SysmondActAddressDto>();
-
-        if (TryGetArrayProperty(root, "data", out var dataArr))
-            return DeserializeArray(dataArr);
-
-        if (TryGetArrayProperty(root, "items", out var itemsArr))
-            return DeserializeArray(itemsArr);
-
-        if (TryGetArrayProperty(root, "result", out var resultArr))
-            return DeserializeArray(resultArr);
-
-        // result: { items: [...] } veya result: { data: [...] }
-        if (root.TryGetProperty("result", out var resultObj)
-            && resultObj.ValueKind == JsonValueKind.Object)
-        {
-            if (TryGetArrayProperty(resultObj, "items", out var nestedItems))
-                return DeserializeArray(nestedItems);
-            if (TryGetArrayProperty(resultObj, "data", out var nestedData))
-                return DeserializeArray(nestedData);
-        }
-
-        // Son çare: STJ model
-        var parsed = JsonSerializer.Deserialize<SysmondActAddressListResult>(body, JsonOptions);
-        return parsed?.ResolveItems() ?? Array.Empty<SysmondActAddressDto>();
-    }
-
     private static bool TryGetArrayProperty(
         JsonElement obj,
         string name,
@@ -286,16 +188,178 @@ public class SysmondActQueryService : ISysmondActQueryService
                 return true;
             }
 
+            if (prop.Value.ValueKind == JsonValueKind.Object)
+            {
+                if (TryGetArrayProperty(prop.Value, "items", out array)
+                    || TryGetArrayProperty(prop.Value, "data", out array))
+                    return true;
+            }
+
             return false;
         }
 
         return false;
     }
 
-    private static IReadOnlyList<SysmondActAddressDto> DeserializeArray(JsonElement array)
+    /// <inheritdoc />
+    public Task<SysmondActAddressDebugResult> GetActAddressesDebugAsync(
+        string accessToken,
+        Guid actId,
+        Guid companyId,
+        bool includeDisabled = true,
+        CancellationToken cancellationToken = default)
+        => FetchActAddressesAsync(accessToken, actId, companyId, includeDisabled, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SysmondActAddressDto>> GetActAddressesAsync(
+        string accessToken,
+        Guid actId,
+        Guid companyId,
+        bool includeDisabled = false,
+        CancellationToken cancellationToken = default)
     {
-        var list = JsonSerializer.Deserialize<List<SysmondActAddressDto>>(array.GetRawText(), JsonOptions);
-        return list ?? (IReadOnlyList<SysmondActAddressDto>)Array.Empty<SysmondActAddressDto>();
+        var result = await FetchActAddressesAsync(accessToken, actId, companyId, includeDisabled, cancellationToken);
+        return result.Items;
+    }
+
+    /// <inheritdoc />
+    public async Task<SysmondActDto?> GetActByIdAsync(
+        string accessToken,
+        Guid actId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        if (actId == Guid.Empty)
+            throw new ArgumentException("actId zorunludur.", nameof(actId));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var url = $"api/app/act-query/{actId:D}/by-id?includeBalances=false";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Sysmond act-query by-id başarısız: ActId={ActId}, Status={Status}, Body={Body}",
+                actId,
+                (int)response.StatusCode,
+                Truncate(body, 400));
+            return null;
+        }
+
+        var parsed = JsonSerializer.Deserialize<SysmondApiResult<SysmondActDto>>(body, JsonOptions);
+        return parsed?.Data;
+    }
+
+    private async Task<SysmondActAddressDebugResult> FetchActAddressesAsync(
+        string accessToken,
+        Guid actId,
+        Guid companyId,
+        bool includeDisabled,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        if (actId == Guid.Empty)
+            throw new ArgumentException("actId zorunludur.", nameof(actId));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var attemptedUrls = new List<string>();
+        SysmondActAddressDebugResult? lastDebug = null;
+
+        foreach (var url in BuildActAddressUrls(actId, companyId, includeDisabled))
+        {
+            attemptedUrls.Add(url);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            using var response = await client.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            lastDebug = new SysmondActAddressDebugResult
+            {
+                HttpStatusCode = (int)response.StatusCode,
+                RawBody = body,
+                RequestUrl = url,
+                AttemptedUrls = attemptedUrls
+            };
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound
+                || IsNotFoundBusinessError(response.StatusCode, body))
+            {
+                continue;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException(
+                    $"Sysmond act-address başarısız ({(int)response.StatusCode}): {Truncate(body, 500)}");
+            }
+
+            var items = SysmondActAddressResponseParser.Parse(body);
+            lastDebug.Items = items;
+            lastDebug.ParsedCount = items.Count;
+
+            if (items.Count > 0)
+            {
+                _logger.LogInformation(
+                    "Sysmond act-address: ActId={ActId}, Count={Count}, Url={Url}",
+                    actId,
+                    items.Count,
+                    url);
+                lastDebug.AttemptedUrls = attemptedUrls;
+                return lastDebug;
+            }
+        }
+
+        var actDetail = await GetActByIdAsync(accessToken, actId, cancellationToken);
+        var debug = lastDebug ?? new SysmondActAddressDebugResult { AttemptedUrls = attemptedUrls };
+        debug.AttemptedUrls = attemptedUrls;
+        debug.CanAccessAddressAndContactInfo = actDetail?.CanAccessAddressAndContactInfo;
+
+        if (debug.ParsedCount == 0 && actDetail?.CanAccessAddressAndContactInfo == false)
+        {
+            _logger.LogWarning(
+                "Sysmond act-address boş; integration kullanıcısında adres yetkisi yok olabilir: ActId={ActId}",
+                actId);
+        }
+        else if (debug.ParsedCount == 0)
+        {
+            _logger.LogWarning(
+                "Sysmond act-address tüm URL'lerde boş: ActId={ActId}, Body={Body}",
+                actId,
+                Truncate(debug.RawBody, 800));
+        }
+
+        return debug;
+    }
+
+    /// <summary>
+    /// Sandbox'ta çalışan format önce: <c>includeDisabled=false</c>, sonra parametresiz, sonra true.
+    /// </summary>
+    private static IEnumerable<string> BuildActAddressUrls(Guid actId, Guid companyId, bool includeDisabled)
+    {
+        var id = actId.ToString("D");
+        var disabledFlags = includeDisabled
+            ? new string?[] { "false", null, "true" }
+            : new string?[] { "false", null, "true" };
+
+        foreach (var flag in disabledFlags)
+        {
+            var suffix = flag is null ? string.Empty : $"&includeDisabled={flag}";
+            yield return $"api/app/act-address?actId={id}{suffix}";
+
+            if (companyId != Guid.Empty)
+            {
+                var company = companyId.ToString("D");
+                yield return $"api/app/act-address?actId={id}&CompanyId={company}{suffix}";
+            }
+        }
     }
 
     /// <inheritdoc />

@@ -24,6 +24,9 @@ public partial class SysmondSyncService
 
         var result = new SysmondActSyncResult { ActsFetched = remoteActs.Count };
         var errors = new List<string>();
+        var warnings = new List<string>();
+        string? firstEmptyAddressBody = null;
+        Guid? firstEmptyAddressActId = null;
         var syncedAt = DateTime.UtcNow;
         var remoteActIds = new HashSet<Guid>();
 
@@ -69,11 +72,45 @@ public partial class SysmondSyncService
                 IReadOnlyList<SysmondActAddressDto> remoteAddresses;
                 try
                 {
-                    remoteAddresses = await _actQuery.GetActAddressesAsync(
+                    var addressFetch = await _actQuery.GetActAddressesDebugAsync(
                         accessToken,
                         remote.Id,
-                        includeDisabled: true,
+                        company.Id,
+                        includeDisabled: false,
                         cancellationToken);
+                    remoteAddresses = addressFetch.Items;
+
+                    if (remoteAddresses.Count == 0)
+                    {
+                        if (firstEmptyAddressBody is null)
+                        {
+                            firstEmptyAddressBody = addressFetch.RawBody;
+                            firstEmptyAddressActId = remote.Id;
+                        }
+
+                        var actForFallback = remote;
+                        var actDetail = await _actQuery.GetActByIdAsync(accessToken, remote.Id, cancellationToken);
+                        if (actDetail is not null)
+                            SysmondActMapper.EnrichFromDetail(actForFallback, actDetail);
+
+                        if (addressFetch.CanAccessAddressAndContactInfo == false
+                            && addressFetch.ParsedCount == 0)
+                        {
+                            warnings.Add(
+                                $"ActId={remote.Id}: integration kullanıcısında act-address yetkisi yok (canAccessAddressAndContactInfo=false).");
+                        }
+
+                        var fallback = SysmondActMapper.CreateFallbackAddressFromAct(actForFallback);
+                        if (fallback is not null)
+                        {
+                            remoteAddresses = [fallback];
+                            result.AddressesFromActFullAddress++;
+                            _logger.LogInformation(
+                                "Act-address boş; actFullAddress fallback: ActId={ActId}, SyntheticAddressId={AddressId}",
+                                remote.Id,
+                                fallback.Id);
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -185,7 +222,21 @@ public partial class SysmondSyncService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (result.AddressesFetched == 0
+            && result.AddressesFromActFullAddress == 0
+            && result.ActsFetched > 0
+            && firstEmptyAddressBody is not null)
+        {
+            warnings.Add(
+                $"Tüm carilerde act-address boş döndü. Örnek ActId={firstEmptyAddressActId}, Body={TruncateWarning(firstEmptyAddressBody, 500)}");
+        }
+
         result.Errors = errors;
+        result.Warnings = warnings;
         return result;
     }
+
+    private static string TruncateWarning(string value, int max)
+        => value.Length <= max ? value : value[..max] + "...";
 }

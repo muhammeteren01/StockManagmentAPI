@@ -15,11 +15,12 @@ namespace API.Tests.Controllers.Sysmond;
 public class SysmondControllerSyncProductsTests
 {
     private readonly Mock<ISysmondSyncService> _syncService = new();
+    private readonly Mock<ISysmondActQueryService> _actQuery = new();
     private readonly SysmondController _sut;
 
     public SysmondControllerSyncProductsTests()
     {
-        _sut = new SysmondController(_syncService.Object);
+        _sut = new SysmondController(_syncService.Object, _actQuery.Object);
     }
 
     /// <summary>Controller: yerel JWT / SuperAdmin yok; [AllowAnonymous].</summary>

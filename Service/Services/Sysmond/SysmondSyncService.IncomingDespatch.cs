@@ -85,7 +85,7 @@ public partial class SysmondSyncService
             accessToken, company.Id, request.CarrierId, cancellationToken);
 
         var deliveryAddress = await ResolveIncomingDeliveryAddressAsync(
-            accessToken, request, cancellationToken);
+            accessToken, company.Id, request, cancellationToken);
         var sellerParty = BuildIncomingSellerParty(request, deliveryAddress);
         var buyerParties = BuildIncomingBuyerParties(company, deliveryAddress);
 
@@ -303,6 +303,7 @@ public partial class SysmondSyncService
     /// </summary>
     private async Task<SysmondDespatchDeliveryAddressCreateDto> ResolveIncomingDeliveryAddressAsync(
         string accessToken,
+        Guid companyId,
         SysmondCreateIncomingDespatchRequest request,
         CancellationToken cancellationToken)
     {
@@ -313,7 +314,11 @@ public partial class SysmondSyncService
 
         if (request.ActId != Guid.Empty)
         {
-            var remote = await _actQuery.GetActAddressesAsync(accessToken, request.ActId, cancellationToken: cancellationToken);
+            var remote = await _actQuery.GetActAddressesAsync(
+                accessToken,
+                request.ActId,
+                companyId,
+                cancellationToken: cancellationToken);
             pick = SysmondActMapper.SelectPreferredAddress(remote);
             if (pick is not null)
             {
