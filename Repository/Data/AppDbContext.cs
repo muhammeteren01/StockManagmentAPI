@@ -26,6 +26,8 @@ public class AppDbContext : DbContext
     public DbSet<StockTransferItem> StockTransferItems => Set<StockTransferItem>();
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
     public DbSet<PurchaseOrderItem> PurchaseOrderItems => Set<PurchaseOrderItem>();
+    public DbSet<Act> Acts => Set<Act>();
+    public DbSet<ActAddress> ActAddresses => Set<ActAddress>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -71,6 +73,14 @@ public class AppDbContext : DbContext
             || (currentUser.CompanyId.HasValue && e.CompanyId == currentUser.CompanyId.Value));
 
         modelBuilder.Entity<StockTransfer>().HasQueryFilter(e =>
+            !currentUser.ApplyTenantFilter
+            || (currentUser.CompanyId.HasValue && e.CompanyId == currentUser.CompanyId.Value));
+
+        modelBuilder.Entity<Act>().HasQueryFilter(e =>
+            !currentUser.ApplyTenantFilter
+            || (currentUser.CompanyId.HasValue && e.CompanyId == currentUser.CompanyId.Value));
+
+        modelBuilder.Entity<ActAddress>().HasQueryFilter(e =>
             !currentUser.ApplyTenantFilter
             || (currentUser.CompanyId.HasValue && e.CompanyId == currentUser.CompanyId.Value));
 

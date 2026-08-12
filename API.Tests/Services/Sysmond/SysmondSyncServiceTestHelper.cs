@@ -23,17 +23,25 @@ internal static class SysmondSyncServiceTestHelper
         Mock<IUnitOfWork> unitOfWork,
         Mock<ISysmondDespatchQueryService>? despatchQuery = null,
         Mock<IUserRepository>? userRepository = null,
-        Mock<IPurchaseOrderRepository>? purchaseOrderRepository = null) =>
+        Mock<IPurchaseOrderRepository>? purchaseOrderRepository = null,
+        Mock<ISysmondDespatchCommandService>? despatchCommand = null,
+        Mock<ISysmondActQueryService>? actQuery = null,
+        Mock<IActRepository>? actRepository = null,
+        Mock<IActAddressRepository>? actAddressRepository = null) =>
         new(
             stockQuery.Object,
             inventoryQuery.Object,
             (despatchQuery ?? new Mock<ISysmondDespatchQueryService>()).Object,
+            (actQuery ?? new Mock<ISysmondActQueryService>()).Object,
             Mock.Of<ISysmondStockCommandService>(),
+            (despatchCommand ?? new Mock<ISysmondDespatchCommandService>()).Object,
             productRepository.Object,
             companyRepository.Object,
             warehouseRepository.Object,
             inventoryRepository.Object,
             (purchaseOrderRepository ?? new Mock<IPurchaseOrderRepository>()).Object,
+            (actRepository ?? new Mock<IActRepository>()).Object,
+            (actAddressRepository ?? new Mock<IActAddressRepository>()).Object,
             (userRepository ?? new Mock<IUserRepository>()).Object,
             unitOfWork.Object,
             NullLogger<SysmondSyncService>.Instance);

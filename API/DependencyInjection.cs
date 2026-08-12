@@ -95,9 +95,6 @@ public static class DependencyInjection
                 Scheme = "bearer",
                 BearerFormat = "JWT",
                 In = ParameterLocation.Header,
-                Description =
-                    "Bearer token. Normal API için Stock Management JWT; " +
-                    "Sysmond sync için Auth/sysmond-token'dan alınan Sysmondax access_token."
             });
 
             options.AddSecurityRequirement(document => new OpenApiSecurityRequirement

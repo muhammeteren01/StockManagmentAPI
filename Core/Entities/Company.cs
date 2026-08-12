@@ -32,4 +32,5 @@ public class Company
     public ICollection<Inventory> Inventories { get; set; } = new List<Inventory>();
     public ICollection<StockTransaction> StockTransactions { get; set; } = new List<StockTransaction>();
     public ICollection<StockTransfer> StockTransfers { get; set; } = new List<StockTransfer>();
+    public ICollection<Act> Acts { get; set; } = new List<Act>();
 }

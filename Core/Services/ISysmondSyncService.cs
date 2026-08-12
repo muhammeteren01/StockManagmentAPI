@@ -1,4 +1,5 @@
 using Core.DTOs.Products;
+using Core.DTOs.PurchaseOrders;
 using Core.DTOs.Sysmond;
 
 namespace Core.Services;
@@ -42,6 +43,15 @@ public interface ISysmondSyncService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Act-query → Act upsert; her cari için act-address → ActAddress upsert; orphan silme.
+    /// Types: 10/20/30/40. Outbound create yok.
+    /// </summary>
+    Task<SysmondActSyncResult> SyncActsAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Sysmondax <c>POST /api/app/stock</c> + yerel Product (ve openingQuantity → Inventory).
     /// </summary>
     Task<ProductResponse> CreateStockAsync(
@@ -68,5 +78,25 @@ public interface ISysmondSyncService
         Guid sysmondCompanyId,
         string accessToken,
         Guid sysmondStockId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gelen irsaliye: Sysmond draft → item(s) → save, sonra lokal PurchaseOrder/Item yazar.
+    /// companyPeriodId boşsa aktif dönem seçilir. Stok hareketi yazılmaz.
+    /// </summary>
+    Task<PurchaseOrderResponse> CreateIncomingDespatchAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        SysmondCreateIncomingDespatchRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Giden irsaliye: Sysmond outgoing draft → item(s) → save + lokal PO.
+    /// companyAddressId zorunlu; period boşsa aktif dönem. Stok hareketi yok.
+    /// </summary>
+    Task<PurchaseOrderResponse> CreateOutgoingDespatchAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        SysmondCreateOutgoingDespatchRequest request,
         CancellationToken cancellationToken = default);
 }

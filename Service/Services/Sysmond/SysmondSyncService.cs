@@ -28,12 +28,16 @@ public partial class SysmondSyncService : ISysmondSyncService
     private readonly ISysmondStockQueryService _stockQuery;
     private readonly ISysmondInventoryQueryService _inventoryQuery;
     private readonly ISysmondDespatchQueryService _despatchQuery;
+    private readonly ISysmondActQueryService _actQuery;
     private readonly ISysmondStockCommandService _stockCommand;
+    private readonly ISysmondDespatchCommandService _despatchCommand;
     private readonly IProductRepository _productRepository;
     private readonly ICompanyRepository _companyRepository;
     private readonly IWarehouseRepository _warehouseRepository;
     private readonly IInventoryRepository _inventoryRepository;
     private readonly IPurchaseOrderRepository _purchaseOrderRepository;
+    private readonly IActRepository _actRepository;
+    private readonly IActAddressRepository _actAddressRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SysmondSyncService> _logger;
@@ -42,12 +46,16 @@ public partial class SysmondSyncService : ISysmondSyncService
         ISysmondStockQueryService stockQuery,
         ISysmondInventoryQueryService inventoryQuery,
         ISysmondDespatchQueryService despatchQuery,
+        ISysmondActQueryService actQuery,
         ISysmondStockCommandService stockCommand,
+        ISysmondDespatchCommandService despatchCommand,
         IProductRepository productRepository,
         ICompanyRepository companyRepository,
         IWarehouseRepository warehouseRepository,
         IInventoryRepository inventoryRepository,
         IPurchaseOrderRepository purchaseOrderRepository,
+        IActRepository actRepository,
+        IActAddressRepository actAddressRepository,
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         ILogger<SysmondSyncService> logger)
@@ -55,12 +63,16 @@ public partial class SysmondSyncService : ISysmondSyncService
         _stockQuery = stockQuery;
         _inventoryQuery = inventoryQuery;
         _despatchQuery = despatchQuery;
+        _actQuery = actQuery;
         _stockCommand = stockCommand;
+        _despatchCommand = despatchCommand;
         _productRepository = productRepository;
         _companyRepository = companyRepository;
         _warehouseRepository = warehouseRepository;
         _inventoryRepository = inventoryRepository;
         _purchaseOrderRepository = purchaseOrderRepository;
+        _actRepository = actRepository;
+        _actAddressRepository = actAddressRepository;
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;

@@ -85,6 +85,53 @@ public class SysmondController : ControllerBase
     }
 
     /// <summary>
+    /// Cari (act-query) + adres (act-address) → Act / ActAddress upsert; orphan silme.
+    /// Types: 10 Müşteri, 20 Tedarikçi, 30 Her ikisi, 40 Taşıyıcı.
+    /// Örnek: POST /api/sysmond/sync/acts?companyId={sysmondCompanyGuid}
+    /// </summary>
+    [HttpPost("sync/acts")]
+    public async Task<IActionResult> SyncActs(
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var result = await _syncService.SyncActsAsync(cid, token, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Gelen irsaliye: Sysmond draft → item(s) → save + lokal PurchaseOrder.
+    /// Örnek: POST /api/sysmond/despatches/incoming?companyId={guid}
+    /// stockId/warehouseId = Sysmond id (ExternalSysmondId). companyPeriodId boşsa aktif dönem.
+    /// Not: Sysmond incoming çoğu şirkette carrierId zorunlu olabilir.
+    /// </summary>
+    [HttpPost("despatches/incoming")]
+    public async Task<IActionResult> CreateIncomingDespatch(
+        [FromQuery] Guid companyId,
+        [FromBody] SysmondCreateIncomingDespatchRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var created = await _syncService.CreateIncomingDespatchAsync(cid, token, request, cancellationToken);
+        return Ok(created);
+    }
+
+    /// <summary>
+    /// Giden irsaliye: Sysmond outgoing draft → item(s) → save + lokal PurchaseOrder.
+    /// companyAddressId zorunlu. Örnek: POST /api/sysmond/despatches/outgoing?companyId={guid}
+    /// </summary>
+    [HttpPost("despatches/outgoing")]
+    public async Task<IActionResult> CreateOutgoingDespatch(
+        [FromQuery] Guid companyId,
+        [FromBody] SysmondCreateOutgoingDespatchRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var created = await _syncService.CreateOutgoingDespatchAsync(cid, token, request, cancellationToken);
+        return Ok(created);
+    }
+
+    /// <summary>
     /// Sysmondax'a stok oluşturur (POST /api/app/stock) ve yerel Product (+ openingQuantity → Inventory) yazar.
     /// Örnek: POST /api/sysmond/stocks?companyId={guid}
     /// openingQuantity: [{ warehouseId, quantity }] — ilgili depoya açılış adedi.
