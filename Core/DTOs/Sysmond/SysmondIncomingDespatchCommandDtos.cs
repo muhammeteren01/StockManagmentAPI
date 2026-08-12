@@ -14,14 +14,15 @@ public class SysmondIncomingDespatchCreateDto
     public int? CurrencyId { get; set; }
     public double CurrencyExchangeRate { get; set; } = 1;
     public string? IdisShipmentNo { get; set; }
+    public SysmondDespatchDeliveryAddressCreateDto? DeliveryAddressCreateDto { get; set; }
     public List<SysmondDespatchPartyCreateDto>? DespatchPartyCreateDtos { get; set; }
     public Guid? OriginalDespatchId { get; set; }
 }
 
-/// <summary>Sysmond <c>DespatchPartyCreateDto</c> (minimal).</summary>
+/// <summary>Sysmond <c>DespatchPartyCreateDto</c> — draft ve POST /despatch-party ile aynı şema.</summary>
 public class SysmondDespatchPartyCreateDto
 {
-    /// <summary>30 = SellerSupplier, 20 = BuyerCustomer, 10 = DeliveryCustomer.</summary>
+    /// <summary>10 DeliveryCustomer, 20 BuyerCustomer, 30 SellerSupplier, 40 OriginatorCustomer.</summary>
     public int Type { get; set; } = 30;
 
     public Guid? ActId { get; set; }
@@ -37,6 +38,11 @@ public class SysmondDespatchPartyCreateDto
     public string? BuildingNumber { get; set; }
     public string? BuildingName { get; set; }
     public string? PostalZone { get; set; }
+    public string? Note { get; set; }
+    public string? PersonFirstName { get; set; }
+    public string? PersonLastName { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
 }
 
 /// <summary>Sysmond <c>POST /api/app/incoming-despatch/item</c> body.</summary>

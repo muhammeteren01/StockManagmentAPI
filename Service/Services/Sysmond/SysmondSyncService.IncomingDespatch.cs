@@ -50,6 +50,8 @@ public partial class SysmondSyncService
         var company = await _companyRepository.GetByIdAsync(sysmondCompanyId, cancellationToken)
             ?? throw new KeyNotFoundException($"Company bulunamadı (Sysmond CompanyId={sysmondCompanyId}).");
 
+        ValidateIncomingBuyerCompany(company);
+
         var users = await _userRepository.GetByCompanyIdAsync(company.Id, cancellationToken);
         var syncUser = users.FirstOrDefault()
             ?? throw new InvalidOperationException(
@@ -70,35 +72,37 @@ public partial class SysmondSyncService
             companyPeriodId = period.Id;
         }
 
-        var issueDate = request.IssueDate ?? DateTime.UtcNow.Date;
-        var actualDate = request.ActualDespatchDate ?? issueDate;
+        var issueDate = ResolveDespatchDateTime(request.IssueDate);
+        var actualDate = request.ActualDespatchDate is null
+            ? issueDate
+            : ResolveDespatchDateTime(request.ActualDespatchDate);
+        var currencyId = request.CurrencyId is > 0 ? request.CurrencyId : 949;
+
+        await EnsureDespatchItemStockPriceIdsAsync(
+            accessToken, company.Id, items, preferPurchasePrice: true, cancellationToken);
+
+        var carrierId = await ResolveIncomingCarrierIdAsync(
+            accessToken, company.Id, request.CarrierId, cancellationToken);
+
+        var deliveryAddress = await ResolveIncomingDeliveryAddressAsync(
+            accessToken, request, cancellationToken);
+        var sellerParty = BuildIncomingSellerParty(request, deliveryAddress);
+        var buyerParties = BuildIncomingBuyerParties(company, deliveryAddress);
 
         var draftBody = new SysmondIncomingDespatchCreateDto
         {
             CompanyPeriodId = companyPeriodId.Value,
-            Scenario = request.Scenario,
-            Type = request.Type,
+            Scenario = request.Scenario <= 0 ? 30 : request.Scenario,
+            Type = request.Type <= 0 ? 10 : request.Type,
             DocNo = request.DocNo,
             IssueDate = issueDate,
             ActualDespatchDate = actualDate,
+            CarrierId = carrierId,
             Description = request.Description,
-            CurrencyId = request.CurrencyId,
+            CurrencyId = currencyId,
             CurrencyExchangeRate = request.CurrencyExchangeRate <= 0 ? 1 : request.CurrencyExchangeRate,
-            DespatchPartyCreateDtos =
-            [
-                new SysmondDespatchPartyCreateDto
-                {
-                    Type = 30, // SellerSupplier
-                    ActId = request.ActId,
-                    ActName = request.ActName,
-                    ActVknTckn = request.ActVknTckn,
-                    ActTaxOfficeName = request.ActTaxOfficeName,
-                    CountryId = request.CountryId <= 0 ? 1 : request.CountryId,
-                    CityId = request.CityId,
-                    CityOther = request.CityOther,
-                    Street = request.Street
-                }
-            ]
+            DeliveryAddressCreateDto = deliveryAddress,
+            DespatchPartyCreateDtos = [sellerParty, .. buyerParties]
         };
 
         var despatchId = await _despatchCommand.CreateIncomingDraftAsync(accessToken, draftBody, cancellationToken);
@@ -154,6 +158,7 @@ public partial class SysmondSyncService
             CreatedAt = DateTime.UtcNow,
             Items = new List<PurchaseOrderItem>()
         };
+        SysmondDespatchPurchaseOrderMapper.ApplyAddressJson(order, deliveryAddress);
 
         for (var i = 0; i < items.Count; i++)
         {
@@ -200,6 +205,246 @@ public partial class SysmondSyncService
             order.Items.Count);
 
         return PurchaseOrderMapper.ToResponse(order);
+    }
+
+    /// <summary>
+    /// Sysmond incoming draft <c>carrierId</c> zorunlu (50009).
+    /// Types=40 → tüm cariler → lokal DB; yoksa sandbox taşıyıcı act oluşturulur.
+    /// </summary>
+    private async Task<Guid> ResolveIncomingCarrierIdAsync(
+        string accessToken,
+        Guid companyId,
+        Guid? requestedCarrierId,
+        CancellationToken cancellationToken)
+    {
+        var carriers = await ListIncomingCarrierCandidatesAsync(
+            accessToken, companyId, cancellationToken);
+
+        if (requestedCarrierId is Guid requested && requested != Guid.Empty)
+        {
+            var match = carriers.FirstOrDefault(c => c.Id == requested);
+            if (match is not null)
+                return match.Id;
+
+            _logger.LogWarning(
+                "Incoming carrierId şirket taşıyıcı listesinde yok; alternatif aranacak. Requested={Requested}",
+                requested);
+        }
+
+        if (carriers.Count > 0)
+        {
+            var pick = carriers[0];
+            _logger.LogInformation(
+                "Incoming carrierId resolved: CarrierId={CarrierId}, Name={Name}",
+                pick.Id,
+                pick.Name ?? pick.Title);
+            return pick.Id;
+        }
+
+        var suffix = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+        var createdId = await _actQuery.CreateActAsync(
+            accessToken,
+            new SysmondActCreateDto
+            {
+                Type = 40,
+                CompanyId = companyId,
+                Name = "Taşıyıcı",
+                ActCode = $"TAS-{suffix}",
+                VknTckn = "11111111111",
+                CountryId = 1,
+                MainCurrencyId = 949
+            },
+            cancellationToken);
+
+        _logger.LogInformation(
+            "Incoming carrier act auto-created: CarrierId={CarrierId}, CompanyId={CompanyId}",
+            createdId,
+            companyId);
+        return createdId;
+    }
+
+    private async Task<List<SysmondActDto>> ListIncomingCarrierCandidatesAsync(
+        string accessToken,
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        static bool IsActiveCarrier(SysmondActDto c) =>
+            c.Id != Guid.Empty && c.Type == 40 && !c.IsDisabled && !c.IsLocked;
+
+        var typed = await _actQuery.GetAllActsAsync(accessToken, companyId, [40], cancellationToken);
+        var active = typed.Where(IsActiveCarrier).ToList();
+        if (active.Count > 0)
+            return active;
+
+        var local = await _actRepository.GetByCompanyIdAsync(companyId, cancellationToken);
+        var localCarriers = local
+            .Where(a => a.Type == 40)
+            .Select(a => new SysmondActDto
+            {
+                Id = a.ExternalSysmondId,
+                CompanyId = a.CompanyId,
+                Type = a.Type,
+                Name = a.Name,
+                Title = a.Title,
+                VknTckn = a.VknTckn
+            })
+            .Where(c => c.Id != Guid.Empty)
+            .ToList();
+        if (localCarriers.Count > 0)
+            return localCarriers;
+
+        var all = await _actQuery.GetAllActsAsync(accessToken, companyId, types: null, cancellationToken);
+        return all.Where(IsActiveCarrier).ToList();
+    }
+
+    /// <summary>
+    /// Sysmond incoming draft teslimat adresi zorunlu (50001).
+    /// Önce istek; yoksa act-address (Delivery/Invoice); sonra lokal sync; son çare istek party alanları.
+    /// </summary>
+    private async Task<SysmondDespatchDeliveryAddressCreateDto> ResolveIncomingDeliveryAddressAsync(
+        string accessToken,
+        SysmondCreateIncomingDespatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.DeliveryAddress?.Address is not null)
+            return request.DeliveryAddress;
+
+        SysmondActAddressDto? pick = null;
+
+        if (request.ActId != Guid.Empty)
+        {
+            var remote = await _actQuery.GetActAddressesAsync(accessToken, request.ActId, cancellationToken: cancellationToken);
+            pick = SysmondActMapper.SelectPreferredAddress(remote);
+            if (pick is not null)
+            {
+                _logger.LogInformation(
+                    "Incoming delivery address from act-address: ActId={ActId}, AddressId={AddressId}, Type={Type}",
+                    request.ActId,
+                    pick.Id,
+                    pick.Type);
+            }
+        }
+
+        if (pick is null)
+        {
+            var localAct = await _actRepository.GetByExternalSysmondIdAsync(request.ActId, cancellationToken);
+            if (localAct is not null)
+            {
+                var localAddresses = await _actAddressRepository.GetByActIdAsync(localAct.Id, cancellationToken);
+                var localDtos = localAddresses.Select(SysmondActMapper.FromEntity).ToList();
+                pick = SysmondActMapper.SelectPreferredAddress(localDtos);
+                if (pick is not null)
+                {
+                    _logger.LogInformation(
+                        "Incoming delivery address from local act-address: ActId={ActId}, AddressId={AddressId}",
+                        request.ActId,
+                        pick.Id);
+                }
+            }
+        }
+
+        if (pick is not null)
+            return SysmondActMapper.ToDeliveryAddressCreateDto(pick);
+
+        if (!string.IsNullOrWhiteSpace(request.Street)
+            || request.CityId is not null
+            || !string.IsNullOrWhiteSpace(request.CityOther))
+        {
+            return new SysmondDespatchDeliveryAddressCreateDto
+            {
+                Address = new SysmondAddressCreateDto
+                {
+                    Type = 30,
+                    CountryId = request.CountryId <= 0 ? 1 : request.CountryId,
+                    CityId = request.CityId,
+                    CityOther = request.CityOther,
+                    Street = request.Street
+                }
+            };
+        }
+
+        throw new ValidationException(
+        [
+            new ValidationFailure(
+                "deliveryAddress",
+                $"Satıcı cari teslimat adresi bulunamadı (ActId={request.ActId}). " +
+                "Sysmond act-address tanımlayın, sync/acts çalıştırın veya deliveryAddress gönderin.")
+        ]);
+    }
+
+    private static SysmondDespatchPartyCreateDto BuildIncomingSellerParty(
+        SysmondCreateIncomingDespatchRequest request,
+        SysmondDespatchDeliveryAddressCreateDto deliveryAddress)
+    {
+        var addr = deliveryAddress.Address;
+        return new SysmondDespatchPartyCreateDto
+        {
+            Type = 30, // SellerSupplier
+            ActId = request.ActId,
+            ActName = request.ActName,
+            ActVknTckn = request.ActVknTckn,
+            ActTaxOfficeName = request.ActTaxOfficeName,
+            CountryId = addr?.CountryId > 0 ? addr.CountryId : request.CountryId <= 0 ? 1 : request.CountryId,
+            CityId = addr?.CityId ?? request.CityId,
+            CityOther = FirstNonEmpty(addr?.CityOther, request.CityOther),
+            DistrictId = addr?.DistrictId,
+            DistrictOther = addr?.DistrictOther,
+            Street = FirstNonEmpty(addr?.Street, request.Street),
+            BuildingNumber = addr?.BuildingNumber,
+            BuildingName = addr?.BuildingName,
+            PostalZone = addr?.PostalZone
+        };
+    }
+
+    /// <summary>Gelen irsaliye alıcısı = bizim şirket. Sysmond 50004: DeliveryCustomer (10) + BuyerCustomer (20).</summary>
+    private static List<SysmondDespatchPartyCreateDto> BuildIncomingBuyerParties(
+        Company company,
+        SysmondDespatchDeliveryAddressCreateDto deliveryAddress)
+    {
+        var addr = deliveryAddress.Address;
+        var name = string.IsNullOrWhiteSpace(company.Name) ? null : company.Name.Trim();
+        var vkn = string.IsNullOrWhiteSpace(company.TaxNumber) ? null : company.TaxNumber.Trim();
+        var taxOffice = FirstNonEmpty(company.TaxOffice, "Ankara VD");
+
+        // Alıcı taraf adresi: şirket kaydı öncelikli (satıcı act-address değil).
+        var countryId = 1;
+        var cityId = addr?.CityId;
+        var cityOther = addr?.CityOther;
+        var districtOther = addr?.DistrictOther;
+        var street = FirstNonEmpty(company.Address, addr?.Street);
+        var buildingNumber = addr?.BuildingNumber;
+        var postalZone = addr?.PostalZone;
+
+        SysmondDespatchPartyCreateDto MakeParty(int type) => new()
+        {
+            Type = type,
+            ActName = name,
+            ActVknTckn = vkn,
+            ActTaxOfficeName = taxOffice,
+            CountryId = countryId,
+            CityId = cityId,
+            CityOther = cityOther,
+            DistrictOther = districtOther,
+            Street = street,
+            BuildingNumber = buildingNumber,
+            PostalZone = postalZone,
+            Phone = Truncate(company.Phone, 50),
+            Email = Truncate(company.Email, 150)
+        };
+
+        return [MakeParty(10), MakeParty(20)];
+    }
+
+    private static void ValidateIncomingBuyerCompany(Company company)
+    {
+        var failures = new List<ValidationFailure>();
+        if (string.IsNullOrWhiteSpace(company.Name))
+            failures.Add(new ValidationFailure("company.name", "Gelen irsaliye alıcısı için şirket adı zorunlu."));
+        if (string.IsNullOrWhiteSpace(company.TaxNumber))
+            failures.Add(new ValidationFailure("company.taxNumber", "Gelen irsaliye alıcısı için şirket VKN/TCKN zorunlu (50004)."));
+
+        if (failures.Count > 0)
+            throw new ValidationException(failures);
     }
 
     /// <inheritdoc />
@@ -255,8 +500,10 @@ public partial class SysmondSyncService
         var companyPeriodId = await ResolveCompanyPeriodIdAsync(
             company.Id, accessToken, request.CompanyPeriodId, cancellationToken);
 
-        var issueDate = request.IssueDate ?? DateTime.UtcNow.Date;
-        var actualDate = request.ActualDespatchDate ?? issueDate;
+        var issueDate = ResolveDespatchDateTime(request.IssueDate);
+        var actualDate = request.ActualDespatchDate is null
+            ? issueDate
+            : ResolveDespatchDateTime(request.ActualDespatchDate);
         var currencyId = request.CurrencyId is > 0 ? request.CurrencyId : 949;
 
         var buyerParties = await BuildOutgoingBuyerPartiesAsync(request, cancellationToken);
@@ -314,7 +561,7 @@ public partial class SysmondSyncService
             despatchType,
             templateId);
 
-        await EnsureOutgoingItemStockPriceIdsAsync(accessToken, company.Id, items, cancellationToken);
+        await EnsureDespatchItemStockPriceIdsAsync(accessToken, company.Id, items, preferPurchasePrice: false, cancellationToken);
 
         var despatchId = await _despatchCommand.CreateOutgoingDraftAsync(accessToken, draftBody, cancellationToken);
 
@@ -471,13 +718,14 @@ public partial class SysmondSyncService
     }
 
     /// <summary>
-    /// Sysmond outgoing-despatch/item <c>stockPriceId</c> zorunlu.
-    /// İstekte yoksa stock-query IncludePrice ile satış fiyatı (yoksa default/ilk) seçilir.
+    /// Sysmond despatch/item <c>stockPriceId</c> zorunlu olabilir.
+    /// İstekte yoksa stock-query IncludePrice ile fiyat seçilir (gelen: alış, giden: satış).
     /// </summary>
-    private async Task EnsureOutgoingItemStockPriceIdsAsync(
+    private async Task EnsureDespatchItemStockPriceIdsAsync(
         string accessToken,
         Guid companyId,
         IReadOnlyList<SysmondCreateIncomingDespatchItemRequest> items,
+        bool preferPurchasePrice,
         CancellationToken cancellationToken)
     {
         var missingStockIds = items
@@ -507,7 +755,7 @@ public partial class SysmondSyncService
                 ]);
             }
 
-            var priceId = SelectPreferredSaleStockPriceId(stock);
+            var priceId = SelectPreferredStockPriceId(stock, preferPurchasePrice);
             if (priceId is null)
             {
                 throw new ValidationException(
@@ -520,14 +768,14 @@ public partial class SysmondSyncService
 
             item.StockPriceId = priceId;
             _logger.LogInformation(
-                "Outgoing item stockPriceId auto-resolved: StockId={StockId}, StockPriceId={StockPriceId}",
+                "Despatch item stockPriceId auto-resolved: StockId={StockId}, StockPriceId={StockPriceId}, PreferPurchase={PreferPurchase}",
                 item.StockId,
-                priceId);
+                priceId,
+                preferPurchasePrice);
         }
     }
 
-    /// <summary>Satış tipi tercih; yoksa IsDefault / ilk fiyat.</summary>
-    private static Guid? SelectPreferredSaleStockPriceId(SysmondStockDto stock)
+    private static Guid? SelectPreferredStockPriceId(SysmondStockDto stock, bool preferPurchase)
     {
         var prices = stock.Prices;
         if (prices is null || prices.Count == 0)
@@ -539,9 +787,33 @@ public partial class SysmondSyncService
                 || name.Contains("satış", StringComparison.OrdinalIgnoreCase)
                 || name.Contains("satis", StringComparison.OrdinalIgnoreCase));
 
-        var sale = prices.FirstOrDefault(p => IsSale(p.StockPriceTypeName));
-        if (sale is not null && sale.Id != Guid.Empty)
-            return sale.Id;
+        static bool IsPurchase(string? name) =>
+            !string.IsNullOrEmpty(name)
+            && (name.Contains("purchase", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("alış", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("alis", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("alım", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("alim", StringComparison.OrdinalIgnoreCase));
+
+        SysmondStockPriceDto? preferred = preferPurchase
+            ? prices.FirstOrDefault(p => IsPurchase(p.StockPriceTypeName))
+            : prices.FirstOrDefault(p => IsSale(p.StockPriceTypeName));
+
+        if (preferred is not null && preferred.Id != Guid.Empty)
+            return preferred.Id;
+
+        if (!preferPurchase)
+        {
+            var sale = prices.FirstOrDefault(p => IsSale(p.StockPriceTypeName));
+            if (sale is not null && sale.Id != Guid.Empty)
+                return sale.Id;
+        }
+        else
+        {
+            var purchase = prices.FirstOrDefault(p => IsPurchase(p.StockPriceTypeName));
+            if (purchase is not null && purchase.Id != Guid.Empty)
+                return purchase.Id;
+        }
 
         var def = prices.FirstOrDefault(p => p.IsDefault && p.Id != Guid.Empty);
         if (def is not null)
@@ -743,6 +1015,24 @@ public partial class SysmondSyncService
         var suffix = despatchId.ToString("N")[..8];
         var combined = $"{doc}-{suffix}";
         return combined.Length <= 100 ? combined : combined[..100];
+    }
+
+    /// <summary>
+    /// İstekte tarih yoksa UTC şimdi; yalnızca gün (00:00:00) gönderilmişse o güne şimdiki saat yazılır.
+    /// </summary>
+    private static DateTime ResolveDespatchDateTime(DateTime? requested)
+    {
+        var now = DateTime.UtcNow;
+        if (requested is null)
+            return now;
+
+        var value = requested.Value;
+        if (value.Kind == DateTimeKind.Unspecified)
+            value = DateTime.SpecifyKind(value, DateTimeKind.Utc);
+
+        return value.TimeOfDay == TimeSpan.Zero
+            ? value.Date.Add(now.TimeOfDay)
+            : value;
     }
 
     private static string? Truncate(string? value, int maxLength)

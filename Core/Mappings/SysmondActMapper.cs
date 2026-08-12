@@ -87,6 +87,121 @@ public static class SysmondActMapper
         entity.SyncedAt = syncedAtUtc;
     }
 
+    /// <summary>Act-address: 20 Delivery → 10 Invoice → ilk dolu kayıt.</summary>
+    public static SysmondActAddressDto? SelectPreferredAddress(IReadOnlyList<SysmondActAddressDto> addresses)
+    {
+        if (addresses.Count == 0)
+            return null;
+
+        var enabled = addresses.Where(a => !a.IsDisabled).ToList();
+        var pool = enabled.Count > 0 ? enabled : addresses.ToList();
+
+        static bool HasLocation(SysmondActAddressDto a) =>
+            a.CityId is not null
+            || !string.IsNullOrWhiteSpace(a.CityOther)
+            || !string.IsNullOrWhiteSpace(a.CityName)
+            || !string.IsNullOrWhiteSpace(a.Street);
+
+        return pool.FirstOrDefault(a => a.Type == 20 && HasLocation(a))
+               ?? pool.FirstOrDefault(a => a.Type == 10 && HasLocation(a))
+               ?? pool.FirstOrDefault(HasLocation)
+               ?? pool.FirstOrDefault(a => a.Type == 20)
+               ?? pool.FirstOrDefault(a => a.Type == 10)
+               ?? pool[0];
+    }
+
+    public static SysmondActAddressDto FromEntity(ActAddress entity) =>
+        new()
+        {
+            Id = entity.ExternalSysmondId,
+            ActId = entity.Act?.ExternalSysmondId ?? Guid.Empty,
+            Type = entity.Type,
+            CountryId = entity.CountryId,
+            CityId = entity.CityId,
+            CityOther = entity.CityOther,
+            DistrictId = entity.DistrictId,
+            DistrictOther = entity.DistrictOther,
+            Street = entity.Street,
+            BuildingNumber = entity.BuildingNumber,
+            BuildingName = entity.BuildingName,
+            Room = entity.Room,
+            Floor = entity.Floor,
+            PostalZone = entity.PostalZone,
+            Note = entity.Note,
+            CountryName = entity.CountryName,
+            CityName = entity.CityName,
+            DistrictName = entity.DistrictName,
+            IsDisabled = entity.IsDisabled,
+            ContactInfo = string.IsNullOrWhiteSpace(entity.ContactFirstName)
+                && string.IsNullOrWhiteSpace(entity.ContactLastName)
+                && string.IsNullOrWhiteSpace(entity.ContactEmail)
+                    ? null
+                    : new SysmondActAddressContactDto
+                    {
+                        FirstName = entity.ContactFirstName,
+                        LastName = entity.ContactLastName,
+                        Email = entity.ContactEmail,
+                        MainPhone = entity.ContactMainPhone,
+                        MainCellPhone = entity.ContactMainCellPhone
+                    }
+        };
+
+    public static SysmondDespatchDeliveryAddressCreateDto ToDeliveryAddressCreateDto(SysmondActAddressDto address)
+    {
+        var addressType = address.Type switch
+        {
+            10 => 10,
+            20 => 20,
+            _ => 30
+        };
+
+        SysmondContactInfoCreateDto? contact = null;
+        if (address.ContactInfo is not null)
+        {
+            contact = new SysmondContactInfoCreateDto
+            {
+                FirstName = address.ContactInfo.FirstName,
+                LastName = address.ContactInfo.LastName,
+                Email = address.ContactInfo.Email,
+                MainPhone = address.ContactInfo.MainPhone,
+                MainCellPhone = address.ContactInfo.MainCellPhone
+            };
+        }
+
+        return new SysmondDespatchDeliveryAddressCreateDto
+        {
+            Address = new SysmondAddressCreateDto
+            {
+                Type = addressType,
+                CountryId = address.CountryId <= 0 ? 1 : address.CountryId,
+                CityId = address.CityId,
+                CityOther = FirstNonEmpty(address.CityOther, address.CityName),
+                DistrictId = address.DistrictId,
+                DistrictOther = FirstNonEmpty(address.DistrictOther, address.DistrictName),
+                Street = address.Street,
+                BuildingNumber = address.BuildingNumber,
+                BuildingName = address.BuildingName,
+                Room = address.Room,
+                Floor = address.Floor,
+                PostalZone = address.PostalZone,
+                Note = address.Note,
+                IsDisabled = address.IsDisabled
+            },
+            Contact = contact
+        };
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value.Trim();
+        }
+
+        return null;
+    }
+
     private static string? Truncate(string? value, int max)
     {
         if (string.IsNullOrWhiteSpace(value))

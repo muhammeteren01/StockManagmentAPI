@@ -99,6 +99,8 @@ public class SysmondSyncServiceIncomingDespatchCreateTests
     public async Task CreateIncomingDespatchAsync_CallsDraftItemSave_AndWritesLocalOrder()
     {
         var company = SysmondSyncServiceTestHelper.CreateCompany(CompanyId);
+        company.TaxNumber = "52819614916";
+        company.TaxOffice = "NİLÜFER VERGİ DAİRESİ MÜD.";
         var user = SysmondSyncServiceTestHelper.CreateUser(CompanyId);
         var actId = Guid.NewGuid();
         var stockExt = Guid.NewGuid();
@@ -106,6 +108,7 @@ public class SysmondSyncServiceIncomingDespatchCreateTests
         var measureUnitId = Guid.NewGuid();
         var despatchId = Guid.NewGuid();
         var itemId = Guid.NewGuid();
+        var carrierId = Guid.NewGuid();
 
         var product = new Product
         {
@@ -153,6 +156,62 @@ public class SysmondSyncServiceIncomingDespatchCreateTests
             .ReturnsAsync(company);
         _userRepository.Setup(r => r.GetByCompanyIdAsync(CompanyId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { user });
+        _stockQuery
+            .Setup(q => q.GetAllStocksAsync(AccessToken, CompanyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SysmondStockDto>
+            {
+                new()
+                {
+                    Id = stockExt,
+                    CompanyId = CompanyId,
+                    Code = "SKU-1",
+                    Name = "Ürün",
+                    Type = 10,
+                    IsActive = true,
+                    Prices =
+                    [
+                        new SysmondStockPriceDto
+                        {
+                            Id = Guid.NewGuid(),
+                            StockId = stockExt,
+                            StockPriceTypeName = "Alış",
+                            UnitPrice = 12.5,
+                            IsDefault = true
+                        }
+                    ]
+                }
+            });
+        _actQuery
+            .Setup(q => q.GetAllActsAsync(
+                AccessToken,
+                CompanyId,
+                It.Is<IReadOnlyList<int>>(t => t != null && t.Contains(40)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SysmondActDto>
+            {
+                new()
+                {
+                    Id = carrierId,
+                    CompanyId = CompanyId,
+                    Type = 40,
+                    Name = "Taşıyıcı"
+                }
+            });
+        _actQuery
+            .Setup(q => q.GetActAddressesAsync(AccessToken, actId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SysmondActAddressDto>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    ActId = actId,
+                    Type = 20,
+                    CountryId = 1,
+                    CityId = 6,
+                    Street = "Test Cad.",
+                    PostalZone = "06000"
+                }
+            });
         _despatchCommand.Setup(c => c.CreateIncomingDraftAsync(AccessToken, It.IsAny<SysmondIncomingDespatchCreateDto>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(despatchId);
         _despatchCommand.Setup(c => c.CreateIncomingItemAsync(AccessToken, It.IsAny<SysmondDespatchItemCreateDto>(), It.IsAny<CancellationToken>()))
@@ -189,9 +248,15 @@ public class SysmondSyncServiceIncomingDespatchCreateTests
                 AccessToken,
                 It.Is<SysmondIncomingDespatchCreateDto>(d =>
                     d.CompanyPeriodId == PeriodId
+                    && d.CarrierId == carrierId
+                    && d.DeliveryAddressCreateDto != null
+                    && d.DeliveryAddressCreateDto.Address!.Street == "Test Cad."
                     && d.DespatchPartyCreateDtos != null
+                    && d.DespatchPartyCreateDtos.Count == 3
                     && d.DespatchPartyCreateDtos[0].ActId == actId
-                    && d.DespatchPartyCreateDtos[0].Type == 30),
+                    && d.DespatchPartyCreateDtos[0].Type == 30
+                    && d.DespatchPartyCreateDtos.Any(p => p.Type == 10 && p.ActVknTckn == "52819614916")
+                    && d.DespatchPartyCreateDtos.Any(p => p.Type == 20 && p.ActVknTckn == "52819614916")),
                 It.IsAny<CancellationToken>()),
             Times.Once);
         _despatchCommand.Verify(

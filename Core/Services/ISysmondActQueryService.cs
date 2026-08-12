@@ -40,4 +40,10 @@ public interface ISysmondActQueryService
         string accessToken,
         Guid companyId,
         CancellationToken cancellationToken = default);
+
+    /// <summary><c>POST /api/app/act/act</c> yeni cari oluşturur.</summary>
+    Task<Guid> CreateActAsync(
+        string accessToken,
+        SysmondActCreateDto body,
+        CancellationToken cancellationToken = default);
 }

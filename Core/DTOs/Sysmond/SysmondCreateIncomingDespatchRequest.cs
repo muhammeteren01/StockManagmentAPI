@@ -9,8 +9,11 @@ public class SysmondCreateIncomingDespatchRequest
     /// <summary>Boşsa aktif CompanyPeriod otomatik seçilir.</summary>
     public Guid? CompanyPeriodId { get; set; }
 
-    /// <summary>10 Temel (varsayılan), 20 Hks, 30 Paper, 40 IDIS.</summary>
-    public int Scenario { get; set; } = 10;
+    /// <summary>Taşıyıcı cari (Sysmond actId, Types=40). Boşsa şirket taşıyıcı listesinden otomatik seçilir.</summary>
+    public Guid? CarrierId { get; set; }
+
+    /// <summary>10 Temel, 20 Hks, 30 Paper (earsiv için önerilen), 40 IDIS.</summary>
+    public int Scenario { get; set; } = 30;
 
     /// <summary>10 Sevk (varsayılan), 20 Matbu.</summary>
     public int Type { get; set; } = 10;
@@ -36,6 +39,9 @@ public class SysmondCreateIncomingDespatchRequest
 
     public int? CurrencyId { get; set; }
     public double CurrencyExchangeRate { get; set; } = 1;
+
+    /// <summary>Boşsa satıcı cari act-address (Delivery/Invoice) otomatik çözülür.</summary>
+    public SysmondDespatchDeliveryAddressCreateDto? DeliveryAddress { get; set; }
 
     public List<SysmondCreateIncomingDespatchItemRequest> Items { get; set; } = [];
 }

@@ -1,5 +1,7 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Core.DTOs.Sysmond;
 using Core.Services;
 using Core.Settings;
@@ -14,7 +16,9 @@ public class SysmondActQueryService : ISysmondActQueryService
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     private readonly IHttpClientFactory _httpClientFactory;
@@ -58,10 +62,7 @@ public class SysmondActQueryService : ISysmondActQueryService
                     $"Sysmond act-query başarısız ({(int)response.StatusCode}): {Truncate(body, 500)}");
             }
 
-            var page = JsonSerializer.Deserialize<SysmondActPagedResult>(body, JsonOptions)
-                ?? throw new InvalidOperationException("Sysmond act-query yanıtı boş veya geçersiz.");
-
-            var items = page.Items ?? Array.Empty<SysmondActDto>();
+            var (items, totalCount) = ParseActQueryPage(body);
             all.AddRange(items);
 
             _logger.LogInformation(
@@ -69,15 +70,105 @@ public class SysmondActQueryService : ISysmondActQueryService
                 companyId,
                 skip,
                 items.Count,
-                page.TotalCount);
+                totalCount);
 
             skip += items.Count;
-            if (items.Count == 0 || skip >= page.TotalCount)
+            if (items.Count == 0 || skip >= totalCount)
                 break;
         }
 
         return all;
     }
+
+    /// <inheritdoc />
+    public async Task<Guid> CreateActAsync(
+        string accessToken,
+        SysmondActCreateDto body,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        ArgumentNullException.ThrowIfNull(body);
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var json = JsonSerializer.Serialize(body, JsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/app/act/act")
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond act/create başarısız ({(int)response.StatusCode}): {Truncate(responseBody, 800)}");
+        }
+
+        var parsed = JsonSerializer.Deserialize<SysmondIdResult>(responseBody, JsonOptions)
+            ?? throw new InvalidOperationException("Sysmond act/create yanıtı boş veya geçersiz.");
+
+        if (parsed.Data is null || parsed.Data.Id == Guid.Empty)
+            throw new InvalidOperationException("Sysmond act/create yanıtında id yok.");
+
+        _logger.LogInformation(
+            "Sysmond act/create OK: Id={Id}, Type={Type}, Name={Name}",
+            parsed.Data.Id,
+            body.Type,
+            body.Name);
+        return parsed.Data.Id;
+    }
+
+    /// <summary>items / data[] / data.items sarmalayıcılarını destekler.</summary>
+    private static (IReadOnlyList<SysmondActDto> Items, long TotalCount) ParseActQueryPage(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return (Array.Empty<SysmondActDto>(), 0);
+
+        var direct = JsonSerializer.Deserialize<SysmondActPagedResult>(body, JsonOptions);
+        if (direct?.Items is { Count: > 0 })
+            return (direct.Items, direct.TotalCount);
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+            return (direct?.Items ?? Array.Empty<SysmondActDto>(), direct?.TotalCount ?? 0);
+
+        long totalCount = 0;
+        if (root.TryGetProperty("totalCount", out var totalEl) && totalEl.TryGetInt64(out var total))
+            totalCount = total;
+
+        if (TryGetArrayProperty(root, "data", out var dataArr))
+        {
+            var items = DeserializeActArray(dataArr);
+            return (items, totalCount > 0 ? totalCount : items.Count);
+        }
+
+        if (TryGetArrayProperty(root, "items", out var itemsArr))
+        {
+            var items = DeserializeActArray(itemsArr);
+            return (items, totalCount > 0 ? totalCount : items.Count);
+        }
+
+        if (root.TryGetProperty("data", out var dataObj) && dataObj.ValueKind == JsonValueKind.Object)
+        {
+            if (dataObj.TryGetProperty("totalCount", out var innerTotal) && innerTotal.TryGetInt64(out var t2))
+                totalCount = t2;
+            if (TryGetArrayProperty(dataObj, "items", out var innerItems))
+            {
+                var items = DeserializeActArray(innerItems);
+                return (items, totalCount > 0 ? totalCount : items.Count);
+            }
+        }
+
+        return (direct?.Items ?? Array.Empty<SysmondActDto>(), direct?.TotalCount ?? 0);
+    }
+
+    private static IReadOnlyList<SysmondActDto> DeserializeActArray(JsonElement array) =>
+        JsonSerializer.Deserialize<List<SysmondActDto>>(array.GetRawText(), JsonOptions)
+        ?? [];
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SysmondActAddressDto>> GetActAddressesAsync(
