@@ -61,4 +61,16 @@ public interface ISysmondActQueryService
         string accessToken,
         SysmondActCreateDto body,
         CancellationToken cancellationToken = default);
+
+    /// <summary><c>PUT /api/app/act/act</c> cari günceller.</summary>
+    Task UpdateActAsync(
+        string accessToken,
+        SysmondActUpdateDto body,
+        CancellationToken cancellationToken = default);
+
+    /// <summary><c>DELETE /api/app/act/{id}/act</c> cari siler.</summary>
+    Task DeleteActAsync(
+        string accessToken,
+        Guid actId,
+        CancellationToken cancellationToken = default);
 }

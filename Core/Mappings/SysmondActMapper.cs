@@ -248,6 +248,104 @@ public static class SysmondActMapper
         };
     }
 
+    /// <summary>Yerel Act + update isteği → Sysmond ActUpdateDto.</summary>
+    public static SysmondActUpdateDto ToActUpdateDto(
+        Act entity,
+        SysmondUpdateActRequest request,
+        Guid sysmondCompanyId,
+        Guid sysmondActId)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(request);
+
+        return new SysmondActUpdateDto
+        {
+            Id = sysmondActId,
+            CompanyId = sysmondCompanyId,
+            Type = request.Type ?? entity.Type,
+            Name = CoalesceTrim(request.Name, entity.Name),
+            Surname = CoalesceTrim(request.Surname, entity.Surname),
+            Title = CoalesceTrim(request.Title, entity.Title),
+            ActCode = CoalesceTrim(request.ActCode, entity.ActCode),
+            VknTckn = CoalesceTrim(request.VknTckn, entity.VknTckn),
+            TaxOfficeName = CoalesceTrim(request.TaxOfficeName, entity.TaxOfficeName),
+            ActFullAddress = CoalesceTrim(request.ActFullAddress, entity.ActFullAddress),
+            CountryId = request.CountryId ?? entity.CountryId,
+            CityId = request.CityId ?? entity.CityId,
+            CityOther = CoalesceTrim(request.CityOther, entity.CityOther),
+            MainCurrencyId = request.MainCurrencyId,
+            IsCommunityCompany = request.IsCommunityCompany ?? false,
+            IsAbroadCustomer = request.IsAbroadCustomer ?? entity.IsAbroadCustomer,
+            Scenario = request.Scenario ?? entity.Scenario,
+            IsDisabled = request.IsDisabled ?? entity.IsDisabled
+        };
+    }
+
+    /// <summary>Update isteğini yerel Act'a uygular.</summary>
+    public static void ApplyUpdateFromRequest(Act entity, SysmondUpdateActRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.Type is int type)
+            entity.Type = type;
+        if (!string.IsNullOrWhiteSpace(request.Name))
+            entity.Name = Truncate(request.Name, 255);
+        if (request.Surname is not null)
+            entity.Surname = Truncate(request.Surname, 255);
+        if (request.Title is not null)
+            entity.Title = Truncate(request.Title, 255);
+        if (request.ActCode is not null)
+            entity.ActCode = Truncate(request.ActCode, 100);
+        if (request.VknTckn is not null)
+            entity.VknTckn = Truncate(request.VknTckn, 20);
+        if (request.TaxOfficeName is not null)
+            entity.TaxOfficeName = Truncate(request.TaxOfficeName, 150);
+        if (request.ActFullAddress is not null)
+            entity.ActFullAddress = Truncate(request.ActFullAddress, 500);
+        if (request.CountryId is not null)
+            entity.CountryId = request.CountryId;
+        if (request.CityId is not null)
+            entity.CityId = request.CityId;
+        if (request.CityOther is not null)
+            entity.CityOther = Truncate(request.CityOther, 100);
+        if (request.Scenario is int scenario)
+            entity.Scenario = scenario;
+        if (request.IsDisabled is bool disabled)
+            entity.IsDisabled = disabled;
+        if (request.IsAbroadCustomer is bool abroad)
+            entity.IsAbroadCustomer = abroad;
+        entity.SyncedAt = DateTime.UtcNow;
+    }
+
+    public static SysmondActResponse ToResponse(Act entity) => new()
+    {
+        Id = entity.Id,
+        ExternalSysmondId = entity.ExternalSysmondId,
+        Type = entity.Type,
+        Name = entity.Name,
+        Surname = entity.Surname,
+        Title = entity.Title,
+        ActCode = entity.ActCode,
+        VknTckn = entity.VknTckn,
+        TaxOfficeName = entity.TaxOfficeName,
+        ActFullAddress = entity.ActFullAddress,
+        CountryId = entity.CountryId,
+        CityId = entity.CityId,
+        CityOther = entity.CityOther,
+        Scenario = entity.Scenario,
+        IsDisabled = entity.IsDisabled,
+        IsAbroadCustomer = entity.IsAbroadCustomer,
+        SyncedAt = entity.SyncedAt
+    };
+
+    private static string? CoalesceTrim(string? preferred, string? fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(preferred))
+            return preferred.Trim();
+        return string.IsNullOrWhiteSpace(fallback) ? null : fallback.Trim();
+    }
+
     public static void EnrichFromDetail(SysmondActDto target, SysmondActDto detail)
     {
         if (string.IsNullOrWhiteSpace(target.ActFullAddress) && !string.IsNullOrWhiteSpace(detail.ActFullAddress))

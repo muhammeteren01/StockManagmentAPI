@@ -31,6 +31,33 @@ public static class SysmondInventoryMapper
             entity.IsActive = remote.IsActive.Value;
     }
 
+    /// <summary>Update isteği → Sysmond WarehouseUpdateDto.</summary>
+    public static SysmondWarehouseUpdateDto ToWarehouseUpdateDto(
+        Warehouse entity,
+        SysmondUpdateWarehouseRequest request,
+        Guid sysmondCompanyId,
+        Guid sysmondWarehouseId) =>
+        new()
+        {
+            Id = sysmondWarehouseId,
+            CompanyId = sysmondCompanyId,
+            Name = !string.IsNullOrWhiteSpace(request.Name)
+                ? request.Name.Trim()
+                : entity.Name,
+            WarehouseCode = request.WarehouseCode is not null
+                ? request.WarehouseCode.Trim()
+                : entity.Location
+        };
+
+    /// <summary>Update isteğini yerel Warehouse'a uygular.</summary>
+    public static void ApplyUpdateFromRequest(Warehouse entity, SysmondUpdateWarehouseRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.Name))
+            entity.Name = request.Name.Trim();
+        if (request.WarehouseCode is not null)
+            entity.Location = request.WarehouseCode.Trim();
+    }
+
     /// <summary>Stock balance <c>rem</c> → Inventory.Quantity (negatif clamp 0).</summary>
     public static int MapQuantity(double rem)
     {

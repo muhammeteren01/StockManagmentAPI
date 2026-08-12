@@ -129,3 +129,49 @@ public class SysmondIncomingDespatchSaveDto
     public Guid DespatchId { get; set; }
     public bool Recalculate { get; set; } = true;
 }
+
+/// <summary>Sysmond <c>PUT /api/app/incoming-despatch/draft</c> body.</summary>
+public class SysmondIncomingDespatchUpdateDto
+{
+    public Guid Id { get; set; }
+    public Guid CompanyPeriodId { get; set; }
+    public int Scenario { get; set; }
+    public int Type { get; set; }
+    public string? DocNo { get; set; }
+    public DateTime IssueDate { get; set; }
+    public DateTime ActualDespatchDate { get; set; }
+    public Guid? CarrierId { get; set; }
+    public string? Description { get; set; }
+    public int? CurrencyId { get; set; }
+    public double CurrencyExchangeRate { get; set; } = 1;
+    public string? IdisShipmentNo { get; set; }
+    public SysmondDespatchDeliveryAddressUpdateDto? DeliveryAddressUpdateDto { get; set; }
+}
+
+/// <summary>Sysmond <c>PUT /api/app/outgoing-despatch/draft</c> body.</summary>
+public class SysmondOutgoingDespatchUpdateDto
+{
+    public Guid Id { get; set; }
+    public Guid CompanyPeriodId { get; set; }
+    public int Scenario { get; set; }
+    public int Type { get; set; }
+    public Guid? TemplateId { get; set; }
+    public DateTime IssueDate { get; set; }
+    public DateTime ActualDespatchDate { get; set; }
+    public Guid? CarrierId { get; set; }
+    public string? Description { get; set; }
+    public int? CurrencyId { get; set; }
+    public double CurrencyExchangeRate { get; set; } = 1;
+    public string? ReceiverPkAlias { get; set; }
+    public string? IdisShipmentNo { get; set; }
+    public SysmondDespatchDeliveryAddressUpdateDto? DeliveryAddressUpdateDto { get; set; }
+}
+
+/// <summary>Sysmond <c>DespatchDeliveryAddressUpdateDto</c>.</summary>
+public class SysmondDespatchDeliveryAddressUpdateDto
+{
+    public Guid? Id { get; set; }
+    public Guid? DespatchId { get; set; }
+    public SysmondAddressCreateDto? Address { get; set; }
+    public SysmondContactInfoCreateDto? Contact { get; set; }
+}

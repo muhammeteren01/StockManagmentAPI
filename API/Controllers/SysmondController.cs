@@ -197,6 +197,66 @@ public class SysmondController : ControllerBase
     }
 
     /// <summary>
+    /// Sysmondax cari günceller (PUT /api/app/act/act) ve yerel Act kaydını günceller.
+    /// </summary>
+    [HttpPut("acts/{id:guid}")]
+    public async Task<IActionResult> UpdateAct(
+        Guid id,
+        [FromQuery] Guid companyId,
+        [FromBody] SysmondUpdateActRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var updated = await _syncService.UpdateActAsync(cid, token, id, request, cancellationToken);
+        return Ok(updated);
+    }
+
+    /// <summary>
+    /// Sysmondax depo günceller (PUT /api/app/warehouse) ve yerel Warehouse kaydını günceller.
+    /// </summary>
+    [HttpPut("warehouses/{id:guid}")]
+    public async Task<IActionResult> UpdateWarehouse(
+        Guid id,
+        [FromQuery] Guid companyId,
+        [FromBody] SysmondUpdateWarehouseRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var updated = await _syncService.UpdateWarehouseAsync(cid, token, id, request, cancellationToken);
+        return Ok(updated);
+    }
+
+    /// <summary>
+    /// Sysmond incoming draft irsaliye günceller (PUT /api/app/incoming-despatch/draft) ve yerel PurchaseOrder'ı günceller.
+    /// </summary>
+    [HttpPut("despatches/incoming/{id:guid}")]
+    public async Task<IActionResult> UpdateIncomingDespatch(
+        Guid id,
+        [FromQuery] Guid companyId,
+        [FromBody] SysmondUpdateIncomingDespatchRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var updated = await _syncService.UpdateIncomingDespatchAsync(cid, token, id, request, cancellationToken);
+        return Ok(updated);
+    }
+
+    /// <summary>
+    /// Sysmond outgoing draft irsaliye günceller (PUT /api/app/outgoing-despatch/draft) ve yerel PurchaseOrder'ı günceller.
+    /// </summary>
+    [HttpPut("despatches/outgoing/{id:guid}")]
+    public async Task<IActionResult> UpdateOutgoingDespatch(
+        Guid id,
+        [FromQuery] Guid companyId,
+        [FromBody] SysmondUpdateOutgoingDespatchRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        var updated = await _syncService.UpdateOutgoingDespatchAsync(cid, token, id, request, cancellationToken);
+        return Ok(updated);
+    }
+
+    /// <summary>
     /// Sysmondax stok siler (DELETE /api/app/stock/{id}) ve yerel Product + Inventory'yi kaldırır.
     /// id = Sysmond stock id (ExternalSysmondId). Örnek: DELETE /api/sysmond/stocks/{id}?companyId={guid}
     /// </summary>
@@ -208,6 +268,64 @@ public class SysmondController : ControllerBase
     {
         var (cid, token) = RequireCompanyAndBearer(companyId);
         await _syncService.DeleteStockAsync(cid, token, id, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Sysmondax cari siler (DELETE /api/app/act/{id}/act) ve yerelde Act + ActAddress temizler.
+    /// </summary>
+    [HttpDelete("acts/{id:guid}")]
+    public async Task<IActionResult> DeleteAct(
+        Guid id,
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        await _syncService.DeleteActAsync(cid, token, id, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Sysmondax depo siler (DELETE /api/app/warehouse/{id}) ve yerelde Warehouse + Inventory temizler.
+    /// </summary>
+    [HttpDelete("warehouses/{id:guid}")]
+    public async Task<IActionResult> DeleteWarehouse(
+        Guid id,
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        await _syncService.DeleteWarehouseAsync(cid, token, id, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Sysmond incoming draft despatch siler (DELETE /api/app/incoming-despatch/{id}/draft-despatch)
+    /// ve yerelde PurchaseOrder kaydını temizler.
+    /// </summary>
+    [HttpDelete("despatches/incoming/{id:guid}")]
+    public async Task<IActionResult> DeleteIncomingDespatch(
+        Guid id,
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        await _syncService.DeleteIncomingDespatchAsync(cid, token, id, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Sysmond outgoing draft despatch siler (DELETE /api/app/outgoing-despatch/{id}/draft-despatch)
+    /// ve yerelde PurchaseOrder kaydını temizler.
+    /// </summary>
+    [HttpDelete("despatches/outgoing/{id:guid}")]
+    public async Task<IActionResult> DeleteOutgoingDespatch(
+        Guid id,
+        [FromQuery] Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var (cid, token) = RequireCompanyAndBearer(companyId);
+        await _syncService.DeleteOutgoingDespatchAsync(cid, token, id, cancellationToken);
         return NoContent();
     }
 

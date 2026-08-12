@@ -1,6 +1,7 @@
 using Core.DTOs.Products;
 using Core.DTOs.PurchaseOrders;
 using Core.DTOs.Sysmond;
+using Core.DTOs.Warehouses;
 
 namespace Core.Services;
 
@@ -78,6 +79,66 @@ public interface ISysmondSyncService
         Guid sysmondCompanyId,
         string accessToken,
         Guid sysmondStockId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Sysmondax <c>PUT /api/app/act/act</c> + yerel Act güncelleme.</summary>
+    Task<SysmondActResponse> UpdateActAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondActId,
+        SysmondUpdateActRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Sysmondax <c>PUT /api/app/warehouse</c> + yerel Warehouse güncelleme.</summary>
+    Task<WarehouseResponse> UpdateWarehouseAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondWarehouseId,
+        SysmondUpdateWarehouseRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Sysmond incoming draft günceller + yerel PurchaseOrder.</summary>
+    Task<PurchaseOrderResponse> UpdateIncomingDespatchAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondDespatchId,
+        SysmondUpdateIncomingDespatchRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Sysmond outgoing draft günceller + yerel PurchaseOrder.</summary>
+    Task<PurchaseOrderResponse> UpdateOutgoingDespatchAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondDespatchId,
+        SysmondUpdateOutgoingDespatchRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Sysmond act siler + yerelde Act/ActAddress temizler.</summary>
+    Task DeleteActAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondActId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Sysmond warehouse siler + yerelde Warehouse/Inventory temizler.</summary>
+    Task DeleteWarehouseAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondWarehouseId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Sysmond incoming draft irsaliyeyi siler + yerel PurchaseOrder temizler.</summary>
+    Task DeleteIncomingDespatchAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondDespatchId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Sysmond outgoing draft irsaliyeyi siler + yerel PurchaseOrder temizler.</summary>
+    Task DeleteOutgoingDespatchAsync(
+        Guid sysmondCompanyId,
+        string accessToken,
+        Guid sysmondDespatchId,
         CancellationToken cancellationToken = default);
 
     /// <summary>

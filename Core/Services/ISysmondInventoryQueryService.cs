@@ -48,4 +48,16 @@ public interface ISysmondInventoryQueryService
         Guid companyPeriodId,
         Guid warehouseId,
         CancellationToken cancellationToken = default);
+
+    /// <summary><c>PUT /api/app/warehouse</c> depo günceller.</summary>
+    Task UpdateWarehouseAsync(
+        string accessToken,
+        SysmondWarehouseUpdateDto body,
+        CancellationToken cancellationToken = default);
+
+    /// <summary><c>DELETE /api/app/warehouse/{id}</c> depo siler.</summary>
+    Task DeleteWarehouseAsync(
+        string accessToken,
+        Guid warehouseId,
+        CancellationToken cancellationToken = default);
 }

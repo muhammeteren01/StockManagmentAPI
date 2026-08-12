@@ -122,6 +122,69 @@ public class SysmondActQueryService : ISysmondActQueryService
         return parsed.Data.Id;
     }
 
+    /// <inheritdoc />
+    public async Task UpdateActAsync(
+        string accessToken,
+        SysmondActUpdateDto body,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        ArgumentNullException.ThrowIfNull(body);
+        if (body.Id == Guid.Empty)
+            throw new ArgumentException("id zorunludur.", nameof(body));
+        if (body.CompanyId == Guid.Empty)
+            throw new ArgumentException("companyId zorunludur.", nameof(body));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var json = JsonSerializer.Serialize(body, JsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, "api/app/act/act")
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond act/update başarısız ({(int)response.StatusCode}): {Truncate(responseBody, 800)}");
+        }
+
+        _logger.LogInformation(
+            "Sysmond act/update OK: Id={Id}, Name={Name}",
+            body.Id,
+            body.Name);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteActAsync(
+        string accessToken,
+        Guid actId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        if (actId == Guid.Empty)
+            throw new ArgumentException("actId zorunludur.", nameof(actId));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/app/act/{actId:D}/act");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond act/delete başarısız ({(int)response.StatusCode}): {Truncate(body, 800)}");
+        }
+
+        _logger.LogInformation("Sysmond act/delete OK: ActId={ActId}", actId);
+    }
+
     /// <summary>items / data[] / data.items sarmalayıcılarını destekler.</summary>
     private static (IReadOnlyList<SysmondActDto> Items, long TotalCount) ParseActQueryPage(string body)
     {

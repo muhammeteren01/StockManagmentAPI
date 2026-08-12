@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Core.DTOs.Sysmond;
 using Core.Services;
@@ -163,6 +164,69 @@ public class SysmondInventoryQueryService : ISysmondInventoryQueryService
             warehouseId: warehouseId,
             stockId: null,
             cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteWarehouseAsync(
+        string accessToken,
+        Guid warehouseId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        if (warehouseId == Guid.Empty)
+            throw new ArgumentException("warehouseId zorunludur.", nameof(warehouseId));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/app/warehouse/{warehouseId:D}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond warehouse/delete başarısız ({(int)response.StatusCode}): {Truncate(body, 800)}");
+        }
+
+        _logger.LogInformation("Sysmond warehouse/delete OK: WarehouseId={WarehouseId}", warehouseId);
+    }
+
+    /// <inheritdoc />
+    public async Task UpdateWarehouseAsync(
+        string accessToken,
+        SysmondWarehouseUpdateDto body,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        ArgumentNullException.ThrowIfNull(body);
+        if (body.Id == Guid.Empty)
+            throw new ArgumentException("id zorunludur.", nameof(body));
+        if (body.CompanyId == Guid.Empty)
+            throw new ArgumentException("companyId zorunludur.", nameof(body));
+
+        var client = _httpClientFactory.CreateClient(SysmondOptions.HttpClientName);
+        var json = JsonSerializer.Serialize(body, JsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, "api/app/warehouse")
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Sysmond warehouse/update başarısız ({(int)response.StatusCode}): {Truncate(responseBody, 800)}");
+        }
+
+        _logger.LogInformation(
+            "Sysmond warehouse/update OK: Id={Id}, Name={Name}",
+            body.Id,
+            body.Name);
     }
 
     private async Task<IReadOnlyList<SysmondStockBalanceDto>> GetStockBalancesAsync(
