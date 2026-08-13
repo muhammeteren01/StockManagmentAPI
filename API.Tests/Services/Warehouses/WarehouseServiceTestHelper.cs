@@ -5,6 +5,9 @@ using Core.Enums;
 using Core.Repositories;
 using Core.UnitOfWork;
 using Core.Validations.Warehouses;
+using Integration.Sysmond.Core.Orchestration;
+using Integration.Sysmond.Core.Settings;
+using Microsoft.Extensions.Options;
 using Moq;
 using Service.Services;
 
@@ -16,13 +19,16 @@ internal static class WarehouseServiceTestHelper
     public static WarehouseService CreateSut(
         Mock<IWarehouseRepository> repository,
         Mock<IUnitOfWork> unitOfWork,
-        Mock<ICurrentUser> currentUser) =>
+        Mock<ICurrentUser> currentUser,
+        bool sysmondEnabled = false) =>
         new(
             repository.Object,
             unitOfWork.Object,
             currentUser.Object,
             new CreateWarehouseRequestValidator(),
-            new UpdateWarehouseRequestValidator());
+            new UpdateWarehouseRequestValidator(),
+            new Mock<ISysmondWarehouseOrchestrator>().Object,
+            Options.Create(new SysmondOptions { Enabled = sysmondEnabled }));
 
     public static CreateWarehouseRequest ValidCreate(
         string name = "Merkez Depo",

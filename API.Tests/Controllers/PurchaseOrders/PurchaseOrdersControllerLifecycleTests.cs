@@ -15,7 +15,7 @@ public class PurchaseOrdersControllerLifecycleTests
 
     public PurchaseOrdersControllerLifecycleTests()
     {
-        _sut = new PurchaseOrdersController(_purchaseOrderService.Object);
+        _sut = PurchaseOrdersControllerTestHelper.CreateSut(_purchaseOrderService);
     }
 
     /// <summary>Approve: başarılı → NoContent(204); ApproveAsync bir kez.</summary>

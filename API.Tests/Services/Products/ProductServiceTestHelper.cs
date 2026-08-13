@@ -5,6 +5,9 @@ using Core.Enums;
 using Core.Repositories;
 using Core.UnitOfWork;
 using Core.Validations.Products;
+using Integration.Sysmond.Core.Orchestration;
+using Integration.Sysmond.Core.Settings;
+using Microsoft.Extensions.Options;
 using Moq;
 using Service.Services;
 
@@ -18,7 +21,8 @@ internal static class ProductServiceTestHelper
         Mock<ICategoryRepository> categoryRepository,
         Mock<ISupplierRepository> supplierRepository,
         Mock<IUnitOfWork> unitOfWork,
-        Mock<ICurrentUser> currentUser) =>
+        Mock<ICurrentUser> currentUser,
+        bool sysmondEnabled = false) =>
         new(
             repository.Object,
             categoryRepository.Object,
@@ -26,7 +30,9 @@ internal static class ProductServiceTestHelper
             unitOfWork.Object,
             currentUser.Object,
             new CreateProductRequestValidator(),
-            new UpdateProductRequestValidator());
+            new UpdateProductRequestValidator(),
+            new Mock<ISysmondProductOrchestrator>().Object,
+            Options.Create(new SysmondOptions { Enabled = sysmondEnabled }));
 
     public static CreateProductRequest ValidCreate(
         Guid? companyId = null,

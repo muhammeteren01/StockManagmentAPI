@@ -26,6 +26,9 @@ public class StockTransactionsControllerAuthorizeAttributeTests
     /// <summary>Okuma action'ları: AppRoles.All (Manager ve Staff dahil).</summary>
     [Theory]
     [InlineData(nameof(StockTransactionsController.GetAll))]
+    [InlineData(nameof(StockTransactionsController.GetEntries))]
+    [InlineData(nameof(StockTransactionsController.GetExits))]
+    [InlineData(nameof(StockTransactionsController.GetTransfers))]
     [InlineData(nameof(StockTransactionsController.GetById))]
     [InlineData(nameof(StockTransactionsController.GetByProduct))]
     [InlineData(nameof(StockTransactionsController.GetByWarehouse))]
@@ -91,6 +94,9 @@ public class StockTransactionsControllerAuthorizeAttributeTests
     /// <summary>Tüm public action'larda AllowAnonymous yok.</summary>
     [Theory]
     [InlineData(nameof(StockTransactionsController.GetAll))]
+    [InlineData(nameof(StockTransactionsController.GetEntries))]
+    [InlineData(nameof(StockTransactionsController.GetExits))]
+    [InlineData(nameof(StockTransactionsController.GetTransfers))]
     [InlineData(nameof(StockTransactionsController.GetById))]
     [InlineData(nameof(StockTransactionsController.GetByProduct))]
     [InlineData(nameof(StockTransactionsController.GetByWarehouse))]

@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\API\API.csproj" />
+    <ProjectReference Include="..\integration\sysmond\Sysmond.Core\Sysmond.Core.csproj" />
   </ItemGroup>
 
 </Project>

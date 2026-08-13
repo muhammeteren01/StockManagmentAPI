@@ -6,6 +6,7 @@ using Core.Services;
 using Core.Validations;
 using FluentAssertions;
 using FluentValidation.Results;
+using Integration.Sysmond.Core.Services;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 

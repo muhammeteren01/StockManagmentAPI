@@ -6,10 +6,13 @@ using Core.Repositories;
 using Core.Services;
 using Core.UnitOfWork;
 using FluentValidation;
+using Integration.Sysmond.Core.Orchestration;
+using Integration.Sysmond.Core.Settings;
+using Microsoft.Extensions.Options;
 
 namespace Service.Services;
 
-/// <summary>Product iş kuralları implementasyonu (DTO).</summary>
+/// <summary>Product iş kuralları implementasyonu (DTO). Sysmond açıkken write → orchestrator.</summary>
 public class ProductService : IProductService
 {
     private readonly IProductRepository _repository;
@@ -19,6 +22,8 @@ public class ProductService : IProductService
     private readonly ICurrentUser _currentUser;
     private readonly IValidator<CreateProductRequest> _createValidator;
     private readonly IValidator<UpdateProductRequest> _updateValidator;
+    private readonly ISysmondProductOrchestrator _sysmondProduct;
+    private readonly SysmondOptions _sysmondOptions;
 
     public ProductService(
         IProductRepository repository,
@@ -27,7 +32,9 @@ public class ProductService : IProductService
         IUnitOfWork unitOfWork,
         ICurrentUser currentUser,
         IValidator<CreateProductRequest> createValidator,
-        IValidator<UpdateProductRequest> updateValidator)
+        IValidator<UpdateProductRequest> updateValidator,
+        ISysmondProductOrchestrator sysmondProduct,
+        IOptions<SysmondOptions> sysmondOptions)
     {
         _repository = repository;
         _categoryRepository = categoryRepository;
@@ -36,6 +43,8 @@ public class ProductService : IProductService
         _currentUser = currentUser;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
+        _sysmondProduct = sysmondProduct;
+        _sysmondOptions = sysmondOptions.Value;
     }
 
     public async Task<ProductResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -67,6 +76,9 @@ public class ProductService : IProductService
         if (existingSku is not null)
             throw new InvalidOperationException($"Bu şirkette SKU zaten kullanılıyor: {request.Sku}");
 
+        if (_sysmondOptions.Enabled)
+            return await _sysmondProduct.CreateAsync(companyId, request, cancellationToken);
+
         var entity = ProductMapper.ToEntity(request, companyId);
         await _repository.AddAsync(entity, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -85,6 +97,9 @@ public class ProductService : IProductService
         if (existingSku is not null && existingSku.Id != id)
             throw new InvalidOperationException($"Bu şirkette SKU zaten kullanılıyor: {request.Sku}");
 
+        if (_sysmondOptions.Enabled && entity.ExternalSysmondId is Guid ext && ext != Guid.Empty)
+            return await _sysmondProduct.UpdateAsync(id, request, cancellationToken);
+
         ProductMapper.ApplyUpdate(entity, request);
         _repository.Update(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -95,6 +110,13 @@ public class ProductService : IProductService
     {
         var entity = await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Product bulunamadı: {id}");
+
+        if (_sysmondOptions.Enabled && entity.ExternalSysmondId is Guid ext && ext != Guid.Empty)
+        {
+            await _sysmondProduct.DeleteAsync(id, cancellationToken);
+            return;
+        }
+
         _repository.Remove(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }

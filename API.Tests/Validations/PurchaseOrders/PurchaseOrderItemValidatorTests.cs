@@ -44,21 +44,31 @@ public class PurchaseOrderItemValidatorTests
             e.ErrorMessage == "Ürün zorunludur.");
     }
 
-    /// <summary>Quantity 0 veya negatif → hata.</summary>
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-3)]
-    public void Validate_WhenQuantityNotPositive_ReturnsError(int quantity)
+    /// <summary>Quantity 0 → geçerli (irsaliye kalemleri).</summary>
+    [Fact]
+    public void Validate_WhenQuantityZero_Succeeds()
     {
         var item = ValidItem();
-        item.Quantity = quantity;
+        item.Quantity = 0;
+
+        var result = _sut.Validate(item);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    /// <summary>Quantity negatif → hata.</summary>
+    [Fact]
+    public void Validate_WhenQuantityNegative_ReturnsError()
+    {
+        var item = ValidItem();
+        item.Quantity = -3;
 
         var result = _sut.Validate(item);
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e =>
             e.PropertyName == nameof(PurchaseOrderItem.Quantity) &&
-            e.ErrorMessage == "Sipariş miktarı pozitif olmalıdır.");
+            e.ErrorMessage == "Miktar negatif olamaz.");
     }
 
     /// <summary>Quantity 1 → geçerli.</summary>

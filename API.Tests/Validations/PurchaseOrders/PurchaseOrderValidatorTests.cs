@@ -60,12 +60,12 @@ public class PurchaseOrderValidatorTests
             e.ErrorMessage == "Şirket zorunludur.");
     }
 
-    /// <summary>SupplierId boş → hata.</summary>
+    /// <summary>SupplierId null → hata (klasik PO).</summary>
     [Fact]
     public void Validate_WhenSupplierIdEmpty_ReturnsError()
     {
         var entity = ValidEntity();
-        entity.SupplierId = Guid.Empty;
+        entity.SupplierId = null;
 
         var result = _sut.Validate(entity);
 
@@ -75,12 +75,12 @@ public class PurchaseOrderValidatorTests
             e.ErrorMessage == "Tedarikçi zorunludur.");
     }
 
-    /// <summary>WarehouseId boş → hata.</summary>
+    /// <summary>WarehouseId null → hata (klasik PO).</summary>
     [Fact]
     public void Validate_WhenWarehouseIdEmpty_ReturnsError()
     {
         var entity = ValidEntity();
-        entity.WarehouseId = Guid.Empty;
+        entity.WarehouseId = null;
 
         var result = _sut.Validate(entity);
 
@@ -117,7 +117,7 @@ public class PurchaseOrderValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e =>
             e.PropertyName == nameof(PurchaseOrder.OrderNumber) &&
-            e.ErrorMessage == "Sipariş numarası zorunludur.");
+            e.ErrorMessage == "Belge / sipariş numarası zorunludur.");
     }
 
     /// <summary>OrderNumber 100 karakterden uzun → hata.</summary>
@@ -132,7 +132,7 @@ public class PurchaseOrderValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e =>
             e.PropertyName == nameof(PurchaseOrder.OrderNumber) &&
-            e.ErrorMessage == "Sipariş numarası en fazla 100 karakter olabilir.");
+            e.ErrorMessage == "Belge / sipariş numarası en fazla 100 karakter olabilir.");
     }
 
     /// <summary>TotalAmount negatif → hata.</summary>
@@ -162,7 +162,7 @@ public class PurchaseOrderValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e =>
             e.PropertyName == nameof(PurchaseOrder.Status) &&
-            e.ErrorMessage == "Geçersiz sipariş durumu.");
+            e.ErrorMessage == "Geçersiz durum.");
     }
 
     /// <summary>Tüm Status değerleri → geçerli.</summary>
@@ -196,19 +196,19 @@ public class PurchaseOrderValidatorTests
             e.ErrorMessage == "Sipariş en az bir kalem içermelidir.");
     }
 
-    /// <summary>Kalem Quantity pozitif değil → hata (RuleForEach).</summary>
+    /// <summary>Kalem Quantity negatif → hata (RuleForEach); 0 irsaliye için geçerli.</summary>
     [Fact]
-    public void Validate_WhenItemQuantityNotPositive_ReturnsError()
+    public void Validate_WhenItemQuantityNegative_ReturnsError()
     {
         var entity = ValidEntity();
-        entity.Items.First().Quantity = 0;
+        entity.Items.First().Quantity = -1;
 
         var result = _sut.Validate(entity);
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e =>
             e.PropertyName == "Items[0].Quantity" &&
-            e.ErrorMessage == "Sipariş miktarı pozitif olmalıdır.");
+            e.ErrorMessage == "Miktar negatif olamaz.");
     }
 
     /// <summary>Kalem ReceivedQuantity Quantity'yi aşarsa → hata.</summary>

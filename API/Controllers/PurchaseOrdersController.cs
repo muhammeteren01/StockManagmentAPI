@@ -1,21 +1,37 @@
 using Core.Authorization;
 using Core.DTOs.PurchaseOrders;
 using Core.Services;
+using Integration.Sysmond.Core.DTOs;
+using Integration.Sysmond.Core.Orchestration;
+using Integration.Sysmond.Core.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace API.Controllers;
 
-/// <summary>Satın alma siparişi endpoint'leri.</summary>
+/// <summary>Satın alma siparişi + Sysmond irsaliye (tek istek) endpoint'leri.</summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
 public class PurchaseOrdersController : ControllerBase
 {
     private readonly IPurchaseOrderService _purchaseOrderService;
+    private readonly ISysmondDespatchOrchestrator _despatchOrchestrator;
+    private readonly Core.Abstractions.ICurrentUser _currentUser;
+    private readonly SysmondOptions _sysmondOptions;
 
-    public PurchaseOrdersController(IPurchaseOrderService purchaseOrderService)
-        => _purchaseOrderService = purchaseOrderService;
+    public PurchaseOrdersController(
+        IPurchaseOrderService purchaseOrderService,
+        ISysmondDespatchOrchestrator despatchOrchestrator,
+        Core.Abstractions.ICurrentUser currentUser,
+        IOptions<SysmondOptions> sysmondOptions)
+    {
+        _purchaseOrderService = purchaseOrderService;
+        _despatchOrchestrator = despatchOrchestrator;
+        _currentUser = currentUser;
+        _sysmondOptions = sysmondOptions.Value;
+    }
 
     /// <summary>Tüm siparişleri listeler.</summary>
     [HttpGet]
@@ -47,6 +63,76 @@ public class PurchaseOrdersController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
+    /// <summary>Gelen irsaliye: tek istekte Sysmond + lokal PurchaseOrder.</summary>
+    [HttpPost("despatches/incoming")]
+    [Authorize(Roles = AppRoles.Writers)]
+    public async Task<ActionResult<PurchaseOrderResponse>> CreateIncomingDespatch(
+        [FromBody] SysmondCreateIncomingDespatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureSysmondEnabled();
+        var companyId = TenantGuard.ResolveCompanyId(_currentUser, null);
+        var created = await _despatchOrchestrator.CreateIncomingAsync(companyId, request, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    /// <summary>Giden irsaliye: tek istekte Sysmond + lokal PurchaseOrder.</summary>
+    [HttpPost("despatches/outgoing")]
+    [Authorize(Roles = AppRoles.Writers)]
+    public async Task<ActionResult<PurchaseOrderResponse>> CreateOutgoingDespatch(
+        [FromBody] SysmondCreateOutgoingDespatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureSysmondEnabled();
+        var companyId = TenantGuard.ResolveCompanyId(_currentUser, null);
+        var created = await _despatchOrchestrator.CreateOutgoingAsync(companyId, request, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    /// <summary>Gelen irsaliye draft güncelle.</summary>
+    [HttpPut("despatches/incoming/{id:guid}")]
+    [Authorize(Roles = AppRoles.Writers)]
+    public async Task<ActionResult<PurchaseOrderResponse>> UpdateIncomingDespatch(
+        Guid id,
+        [FromBody] SysmondUpdateIncomingDespatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureSysmondEnabled();
+        return Ok(await _despatchOrchestrator.UpdateIncomingAsync(id, request, cancellationToken));
+    }
+
+    /// <summary>Giden irsaliye draft güncelle.</summary>
+    [HttpPut("despatches/outgoing/{id:guid}")]
+    [Authorize(Roles = AppRoles.Writers)]
+    public async Task<ActionResult<PurchaseOrderResponse>> UpdateOutgoingDespatch(
+        Guid id,
+        [FromBody] SysmondUpdateOutgoingDespatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureSysmondEnabled();
+        return Ok(await _despatchOrchestrator.UpdateOutgoingAsync(id, request, cancellationToken));
+    }
+
+    /// <summary>Gelen draft irsaliye sil.</summary>
+    [HttpDelete("despatches/incoming/{id:guid}")]
+    [Authorize(Roles = AppRoles.Writers)]
+    public async Task<IActionResult> DeleteIncomingDespatch(Guid id, CancellationToken cancellationToken)
+    {
+        EnsureSysmondEnabled();
+        await _despatchOrchestrator.DeleteIncomingAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Giden draft irsaliye sil.</summary>
+    [HttpDelete("despatches/outgoing/{id:guid}")]
+    [Authorize(Roles = AppRoles.Writers)]
+    public async Task<IActionResult> DeleteOutgoingDespatch(Guid id, CancellationToken cancellationToken)
+    {
+        EnsureSysmondEnabled();
+        await _despatchOrchestrator.DeleteOutgoingAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>Siparişi onaylar (Approved).</summary>
     [HttpPost("{id:guid}/approve")]
     [Authorize(Roles = AppRoles.Writers)]
@@ -72,5 +158,11 @@ public class PurchaseOrdersController : ControllerBase
     {
         await _purchaseOrderService.CancelAsync(id, cancellationToken);
         return NoContent();
+    }
+
+    private void EnsureSysmondEnabled()
+    {
+        if (!_sysmondOptions.Enabled)
+            throw new InvalidOperationException("Sysmond entegrasyonu kapalı (Sysmond:Enabled=false).");
     }
 }

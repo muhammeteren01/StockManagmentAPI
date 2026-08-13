@@ -1,4 +1,5 @@
 using Core.DTOs.StockTransactions;
+using Core.Enums;
 
 namespace Core.Services;
 
@@ -9,5 +10,6 @@ public interface IStockTransactionService
     Task<IReadOnlyList<StockTransactionResponse>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StockTransactionResponse>> GetByProductIdAsync(Guid productId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StockTransactionResponse>> GetByWarehouseIdAsync(Guid warehouseId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<StockTransactionResponse>> GetByTypeAsync(TransactionType type, CancellationToken cancellationToken = default);
     Task<StockTransactionResponse> CreateAsync(CreateStockTransactionRequest request, CancellationToken cancellationToken = default);
 }

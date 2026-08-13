@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/integration/" />
+  <Folder Name="/integration/sysmond/">
+    <Project Path="integration/sysmond/Sysmond.Api/Sysmond.Api.csproj" />
+    <Project Path="integration/sysmond/Sysmond.Core/Sysmond.Core.csproj" />
+    <Project Path="integration/sysmond/Sysmond.Service/Sysmond.Service.csproj" />
+    <Project Path="integration/sysmond/Sysmond.Tests/Sysmond.Tests.csproj" />
+  </Folder>
   <Project Path="API.Tests/API.Tests.csproj" />
   <Project Path="API/API.csproj" />
   <Project Path="Core/Core.csproj" />

@@ -6,8 +6,8 @@ namespace Core.Entities;
 /// Stok hareket kaydı (audit log). Belge (PurchaseOrder / irsaliye) kalemlerinden ayrıdır;
 /// miktar değişimi burada tutulur. Hareket bir transferden veya belgeden (PO receive / irsaliye stok etkisi)
 /// geliyorsa TransferId / PurchaseOrderId dolu olur.
-/// Sysmond despatch-item sync legacy alanları ExternalSysmond* ile tutulabilir; belge modeli PO'ya taşındıkça
-/// yeni hareketler PurchaseOrderId üzerinden bağlanır.
+/// Sysmond stock-receipt (giriş/çıkış/transfer) sync: ExternalSysmondId = fiş kalemi id;
+/// ExternalSysmondDespatchId = stock-receipt header id; ExternalSysmondCompanyPeriodId = dönem.
 /// </summary>
 public class StockTransaction
 {
@@ -23,13 +23,13 @@ public class StockTransaction
     /// <summary>Mal alımından (PO) kaynaklıysa referans</summary>
     public Guid? PurchaseOrderId { get; set; }
 
-    /// <summary>Sysmond despatch-item.id — upsert anahtarı.</summary>
+    /// <summary>Sysmond stock-receipt-item.id (veya TransferIn için türetilmiş id) — upsert anahtarı.</summary>
     public Guid? ExternalSysmondId { get; set; }
 
-    /// <summary>Sysmond despatch.id — header gruplama.</summary>
+    /// <summary>Sysmond stock-receipt.id (veya legacy despatch.id) — header gruplama.</summary>
     public Guid? ExternalSysmondDespatchId { get; set; }
 
-    /// <summary>Sysmond despatch.companyPeriodId — dönem-scoped orphan için.</summary>
+    /// <summary>Sysmond companyPeriodId — dönem-scoped orphan için.</summary>
     public Guid? ExternalSysmondCompanyPeriodId { get; set; }
 
     /// <summary>Hareket türü. DB'ye string olarak yazılır (DbContext'te HasConversion ile).</summary>

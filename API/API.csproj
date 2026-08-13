@@ -30,6 +30,8 @@
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\Repository\Repository.csproj" />
     <ProjectReference Include="..\Service\Service.csproj" />
+    <ProjectReference Include="..\integration\sysmond\Sysmond.Api\Sysmond.Api.csproj" />
+    <ProjectReference Include="..\integration\sysmond\Sysmond.Service\Sysmond.Service.csproj" />
   </ItemGroup>
 
 </Project>

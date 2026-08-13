@@ -64,6 +64,14 @@ public class StockTransactionService : IStockTransactionService
         return list.Select(StockTransactionMapper.ToResponse).ToList();
     }
 
+    public async Task<IReadOnlyList<StockTransactionResponse>> GetByTypeAsync(
+        TransactionType type,
+        CancellationToken cancellationToken = default)
+    {
+        var list = await _transactionRepository.GetByTypeAsync(type, cancellationToken);
+        return list.Select(StockTransactionMapper.ToResponse).ToList();
+    }
+
     public async Task<StockTransactionResponse> CreateAsync(CreateStockTransactionRequest request, CancellationToken cancellationToken = default)
     {
         await ValidationHelper.EnsureValidAsync(_createValidator, request, cancellationToken);

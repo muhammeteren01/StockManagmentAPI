@@ -3,6 +3,7 @@ using API.Controllers;
 using Core.Enums;
 using Core.Services;
 using FluentAssertions;
+using Integration.Sysmond.Core.Services;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 

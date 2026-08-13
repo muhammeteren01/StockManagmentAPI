@@ -1,8 +1,9 @@
 using System.Security.Claims;
 using Core.Authorization;
 using Core.DTOs.Auth;
-using Core.DTOs.Sysmond;
 using Core.Services;
+using Integration.Sysmond.Core.DTOs;
+using Integration.Sysmond.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

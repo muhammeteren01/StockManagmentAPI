@@ -1,4 +1,5 @@
 using Core.Entities;
+using Core.Enums;
 using Core.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Repository.Data;
@@ -36,6 +37,16 @@ public class StockTransactionRepository : GenericRepository<StockTransaction>, I
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<StockTransaction>> GetByTypeAsync(
+        TransactionType type,
+        CancellationToken cancellationToken = default)
+    {
+        return await DbSet.AsNoTracking()
+            .Where(x => x.TransactionType == type)
+            .OrderByDescending(x => x.TransactionDate)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<StockTransaction?> GetByExternalSysmondIdAsync(
         Guid externalSysmondId,
         CancellationToken cancellationToken = default)
@@ -43,5 +54,18 @@ public class StockTransactionRepository : GenericRepository<StockTransaction>, I
         return await DbSet.FirstOrDefaultAsync(
             x => x.ExternalSysmondId == externalSysmondId,
             cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<StockTransaction>> GetSysmondByCompanyPeriodAsync(
+        Guid companyId,
+        Guid companyPeriodId,
+        CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .Where(x =>
+                x.CompanyId == companyId &&
+                x.ExternalSysmondId != null &&
+                x.ExternalSysmondCompanyPeriodId == companyPeriodId)
+            .ToListAsync(cancellationToken);
     }
 }

@@ -1,0 +1,9 @@
+global using Integration.Sysmond.Core.DTOs.Acts;
+global using Integration.Sysmond.Core.DTOs.Common;
+global using Integration.Sysmond.Core.DTOs.Company;
+global using Integration.Sysmond.Core.DTOs.Despatches;
+global using Integration.Sysmond.Core.DTOs.Inventory;
+global using Integration.Sysmond.Core.DTOs.StockReceipts;
+global using Integration.Sysmond.Core.DTOs.Stocks;
+global using Integration.Sysmond.Core.DTOs.Sync;
+global using Integration.Sysmond.Core.DTOs.Warehouses;

@@ -16,7 +16,7 @@ public class PurchaseOrdersControllerGetTests
 
     public PurchaseOrdersControllerGetTests()
     {
-        _sut = new PurchaseOrdersController(_purchaseOrderService.Object);
+        _sut = PurchaseOrdersControllerTestHelper.CreateSut(_purchaseOrderService);
     }
 
     /// <summary>

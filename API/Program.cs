@@ -8,6 +8,9 @@ using Core.Abstractions;
 using Core.Settings;
 using Core.Validations.Users;
 using FluentValidation;
+using Integration.Sysmond.Api;
+using Integration.Sysmond.Api.Controllers;
+using Integration.Sysmond.Service.DependencyResolvers;
 using Microsoft.EntityFrameworkCore;
 using Repository.Data;
 using Repository.DependencyResolvers;
@@ -33,9 +36,11 @@ try
     {
         containerBuilder.RegisterModule(new AutofacRepositoryModule());
         containerBuilder.RegisterModule(new AutofacServiceModule());
+        containerBuilder.RegisterModule(new AutofacSysmondModule());
     });
 
-    builder.Services.AddControllers();
+    builder.Services.AddControllers()
+        .AddApplicationPart(typeof(SysmondController).Assembly);
     builder.Services.AddProblemDetails();
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddHttpContextAccessor();
